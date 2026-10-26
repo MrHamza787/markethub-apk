@@ -26,7 +26,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Extract app_name and applicationId dynamically from Android project files
+          # Extract app_name, applicationId, and versionName dynamically from Android project files
           APP_NAME=$(sed -n 's/.*<string name="app_name">\([^<]*\)<\/string>.*/\1/p' app/src/main/res/values/strings.xml | head -n 1 || true)
           if [ -z "$APP_NAME" ]; then
             APP_NAME="AndroidApp"
@@ -37,6 +37,10 @@ jobs:
           fi
 
           APP_ID=$(sed -n 's/.*applicationId *= *"\([^"]*\)".*/\1/p' app/build.gradle.kts | head -n 1 || true)
+          if [ -z "$APP_ID" ]; then
+            APP_ID="com.example"
+          fi
+
           VERSION_NAME=$(sed -n 's/.*versionName *= *"\([^"]*\)".*/\1/p' app/build.gradle.kts | head -n 1 || true)
           if [ -z "$VERSION_NAME" ]; then
             VERSION_NAME="1.0"
@@ -44,7 +48,54 @@ jobs:
 
           mkdir -p dist
 
-          # 1. Prefer the genuine debug APK compiled in Google AI Studio's native Android build environment
+          # 1. Ensure debug.keystore exists (AI Studio strips debug.keystore and debug.keystore.base64 when exporting to GitHub)
+          if [ ! -f "debug.keystore" ]; then
+            if [ -f "debug.keystore.base64" ]; then
+              echo "Restoring debug.keystore from debug.keystore.base64..."
+              base64 -d debug.keystore.base64 > debug.keystore
+            else
+              echo "Restoring AI Studio debug.keystore..."
+              DEBUG_KEYSTORE_B64="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"
+              echo "$DEBUG_KEYSTORE_B64" | base64 -d > debug.keystore || keytool -genkeypair -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+            fi
+          fi
+
+          # 2. Ensure app/google-services.json exists (AI Studio strips google-services.json when exporting to GitHub)
+          if [ ! -f "app/google-services.json" ]; then
+            echo "Restoring app/google-services.json for Google Services plugin & default_web_client_id..."
+            GOOGLE_SERVICES_GZ_B64="H4sICGAy32oAA2dvb2dsZS1zZXJ2aWNlcy5qc29uAO1WTW/UMBC991dUObeRHduJ3RviQ+ICBxBIIBQ59iTxJnGyzgd00f53nO223bR0BYjCpaesxuOZeW9eXvb7yelp0Ll2BWpIjc3b4OL0u48dRO3YZOB8PKA84ogTTlAigrNlltFzxmQmo00jCzj/GkGmrrP6oXU+mGajqmD4WWaYGweZ7GGfGsquC/zl7VwhULUBO9/7vKt3NeFNfDn47qBpM1NDr6vU19kPhy8OAVxIq11r9AXGhGmKFAcEVOQCUB6raD/5rtg+M32o20yDVNUM0MoG5l6qbUJp+mHUpg0b6TzqcszCrvrWTJvg5uZ2/2t73S1o5TiU6R28h5gXuPXdtZzzWginV6YcSUFy2uk+WnOWNBXWFXWGzbz2YdG2RQ1jD061dvClQj/wAeTbFsNlNwPCi7NrQn7CxG9zcba8rMANJjdKDpCWsi/nAgmOE6EppprjhKCIIYIV4QojlQlJEdZYMRBJcFBqe8vx2e9yOJjBcupINUVMEVtaF8cCJWuYCs6a8U85JPfW/uVm7bIzaQWXRzY+OjfXukoKnr3eyHeXz4p1/KI/f/MNfYBX4s1znbx+2yhi2Mehe/X++aeX95V229IPPhkF/fLF8dCMnYxnf39+V+ntUIJLu1oOeeua9EG93kXwjzg/yvtSGJ6M+y/i7rmXzF+1GZb4YMK9YFGWRBT9fZtxspFaWh/rpDWtDa1r9MY+ptt0HatXY5HLsi8ZSyrecJznNJc1rvpmxf+32zxEya+YThTpRGYU/JYQFiRGyq+NM45pzJBQWRzhJFHkyXSeTOco70th/FvT0RFCGhASkZQSC/4IptNupJV+oDr03/Nus35Mu8kmsZqK2kjK2IjXwkHd1RVxqwrVNZ9W/91u7pHxC0ZDBGUIZE5JFgOTJGYxZDRDmeYR6FgnKgKg+OnfzZPRHOd9KYwjRnOyJ8qL1+amGJ0c/LcxncD1/rmzk+Bk+wOwZXD/Gw4AAA=="
+            echo "$GOOGLE_SERVICES_GZ_B64" | base64 -d | gunzip > app/google-services.json
+
+            # Ensure current applicationId from app/build.gradle.kts is present in app/google-services.json
+            python3 - "$APP_ID" <<'PYEOF'
+          import json, sys, copy
+          app_id = sys.argv[1]
+          path = "app/google-services.json"
+          with open(path, "r", encoding="utf-8") as f:
+              data = json.load(f)
+          clients = data.get("client", [])
+          has_pkg = any(
+              c.get("client_info", {}).get("android_client_info", {}).get("package_name") == app_id
+              for c in clients
+          )
+          if not has_pkg and clients:
+              template = copy.deepcopy(clients[0])
+              template.setdefault("client_info", {}).setdefault("android_client_info", {})["package_name"] = app_id
+              for oauth in template.get("oauth_client", []):
+                  if "android_info" in oauth:
+                      oauth["android_info"]["package_name"] = app_id
+              clients.append(template)
+              with open(path, "w", encoding="utf-8") as f:
+                  json.dump(data, f, indent=2)
+          PYEOF
+          fi
+
+          # 3. Ensure .env exists if required by Secrets Gradle Plugin
+          if [ ! -f ".env" ] && [ -f ".env.example" ]; then
+            cp .env.example .env
+          fi
+
+          # 4. Use pre-compiled APK if present, otherwise compile with Gradle
           if [ -f ".build-outputs/app-debug.apk" ]; then
             echo "Found pre-compiled Google AI Studio native APK at .build-outputs/app-debug.apk"
             cp -f ".build-outputs/app-debug.apk" "dist/app-debug.apk"
@@ -52,13 +103,7 @@ jobs:
             echo "Found pre-compiled APK at app/build/outputs/apk/debug/app-debug.apk"
             cp -f "app/build/outputs/apk/debug/app-debug.apk" "dist/app-debug.apk"
           else
-            echo "No pre-compiled APK found in repository; compiling with Gradle..."
-            if [ -f "debug.keystore.base64" ] && [ ! -f "debug.keystore" ]; then
-              base64 -d debug.keystore.base64 > debug.keystore
-            fi
-            if [ ! -f ".env" ] && [ -f ".env.example" ]; then
-              cp .env.example .env
-            fi
+            echo "Compiling installable debug APK with Gradle..."
             gradle assembleDebug --no-daemon
             cp -f "app/build/outputs/apk/debug/app-debug.apk" "dist/app-debug.apk"
           fi
