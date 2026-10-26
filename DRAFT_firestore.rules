@@ -1,0 +1,553 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Pillar 4.1: Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Core Primitives
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+    function incoming() {
+      return request.resource.data;
+    }
+    function existing() {
+      return resource.data;
+    }
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isValidTimestamp(ts) {
+      return ts is timestamp && ts <= request.time;
+    }
+    function isAdmin() {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        ('email' in request.auth.token &&
+         'email_verified' in request.auth.token &&
+         request.auth.token.email == 'awan11118@gmail.com' &&
+         request.auth.token.email_verified == true)
+      );
+    }
+
+    // Validation Helpers
+    function isValidAdminRecord(data) {
+      return data.keys().hasAll(['uid', 'email', 'createdAt']) &&
+             data.keys().hasOnly(['uid', 'email', 'createdAt']) &&
+             data.uid is string && data.uid.size() >= 1 && data.uid.size() <= 128 &&
+             data.email is string && data.email.size() >= 3 && data.email.size() <= 150 &&
+             isValidTimestamp(data.createdAt);
+    }
+
+    function isValidUserProfile(data) {
+      return data.keys().hasAll(['userId', 'displayName', 'email', 'role', 'isSuspended', 'createdAt', 'updatedAt']) &&
+             data.keys().hasOnly(['userId', 'displayName', 'email', 'role', 'phone', 'isSuspended', 'createdAt', 'updatedAt']) &&
+             data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 100 &&
+             data.email is string && data.email.size() >= 3 && data.email.size() <= 150 &&
+             data.role is string && (data.role == 'customer' || data.role == 'shopkeeper' || data.role == 'admin') &&
+             (!('phone' in data) || (data.phone is string && data.phone.size() <= 30)) &&
+             data.isSuspended is bool &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidMarket(data) {
+      return data.keys().hasAll(['name', 'city', 'address', 'description', 'isActive', 'createdAt', 'updatedAt']) &&
+             data.keys().hasOnly(['name', 'city', 'address', 'description', 'isActive', 'createdAt', 'updatedAt']) &&
+             data.name is string && data.name.size() >= 2 && data.name.size() <= 100 &&
+             data.city is string && data.city.size() >= 2 && data.city.size() <= 60 &&
+             data.address is string && data.address.size() >= 3 && data.address.size() <= 250 &&
+             data.description is string && data.description.size() >= 3 && data.description.size() <= 500 &&
+             data.isActive is bool &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidCategory(data) {
+      return data.keys().hasAll(['name', 'slug', 'iconName', 'description', 'displayOrder', 'isActive', 'createdAt', 'updatedAt']) &&
+             data.keys().hasOnly(['name', 'slug', 'iconName', 'description', 'displayOrder', 'isActive', 'createdAt', 'updatedAt']) &&
+             data.name is string && data.name.size() >= 2 && data.name.size() <= 80 &&
+             data.slug is string && data.slug.size() >= 2 && data.slug.size() <= 80 &&
+             data.iconName is string && data.iconName.size() >= 2 && data.iconName.size() <= 50 &&
+             data.description is string && data.description.size() >= 2 && data.description.size() <= 250 &&
+             data.displayOrder is int && data.displayOrder >= 0 && data.displayOrder <= 1000 &&
+             data.isActive is bool &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidShop(data) {
+      return data.keys().hasAll([
+               'ownerId', 'ownerName', 'name', 'categoryId', 'categoryName',
+               'marketId', 'marketName', 'address', 'description', 'businessHours',
+               'contactPhone', 'whatsappNumber', 'status', 'isVerified', 'isFeatured',
+               'viewsCount', 'inquiriesCount', 'createdAt', 'updatedAt'
+             ]) &&
+             data.keys().hasOnly([
+               'ownerId', 'ownerName', 'name', 'categoryId', 'categoryName',
+               'marketId', 'marketName', 'address', 'mapLocation', 'description',
+               'businessHours', 'contactPhone', 'whatsappNumber', 'logoUrl', 'coverUrl',
+               'status', 'isVerified', 'isFeatured', 'viewsCount', 'inquiriesCount',
+               'createdAt', 'updatedAt'
+             ]) &&
+             isValidId(data.ownerId) &&
+             data.ownerName is string && data.ownerName.size() >= 1 && data.ownerName.size() <= 100 &&
+             data.name is string && data.name.size() >= 2 && data.name.size() <= 100 &&
+             isValidId(data.categoryId) &&
+             data.categoryName is string && data.categoryName.size() >= 2 && data.categoryName.size() <= 100 &&
+             isValidId(data.marketId) &&
+             data.marketName is string && data.marketName.size() >= 2 && data.marketName.size() <= 100 &&
+             data.address is string && data.address.size() >= 3 && data.address.size() <= 250 &&
+             (!('mapLocation' in data) || (data.mapLocation is string && data.mapLocation.size() <= 250)) &&
+             data.description is string && data.description.size() >= 3 && data.description.size() <= 1000 &&
+             data.businessHours is string && data.businessHours.size() >= 2 && data.businessHours.size() <= 120 &&
+             data.contactPhone is string && data.contactPhone.size() >= 5 && data.contactPhone.size() <= 30 &&
+             data.whatsappNumber is string && data.whatsappNumber.size() >= 5 && data.whatsappNumber.size() <= 30 &&
+             (!('logoUrl' in data) || (data.logoUrl is string && data.logoUrl.size() <= 800)) &&
+             (!('coverUrl' in data) || (data.coverUrl is string && data.coverUrl.size() <= 800)) &&
+             data.status is string && (data.status == 'pending' || data.status == 'approved' || data.status == 'rejected' || data.status == 'suspended') &&
+             data.isVerified is bool &&
+             data.isFeatured is bool &&
+             data.viewsCount is int && data.viewsCount >= 0 &&
+             data.inquiriesCount is int && data.inquiriesCount >= 0 &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidProduct(data) {
+      return data.keys().hasAll([
+               'shopId', 'shopName', 'marketName', 'ownerId', 'name', 'normalizedName',
+               'categoryId', 'categoryName', 'description', 'pricePkr', 'originalPricePkr',
+               'stockQuantity', 'isAvailable', 'isNewArrival', 'isPopular', 'whatsappNumber',
+               'status', 'viewsCount', 'inquiriesCount', 'createdAt', 'updatedAt'
+             ]) &&
+             data.keys().hasOnly([
+               'shopId', 'shopName', 'marketName', 'ownerId', 'name', 'normalizedName',
+               'categoryId', 'categoryName', 'description', 'pricePkr', 'originalPricePkr',
+               'stockQuantity', 'isAvailable', 'isNewArrival', 'isPopular', 'imageUrl',
+               'whatsappNumber', 'status', 'viewsCount', 'inquiriesCount', 'createdAt', 'updatedAt'
+             ]) &&
+             isValidId(data.shopId) &&
+             data.shopName is string && data.shopName.size() >= 2 && data.shopName.size() <= 100 &&
+             data.marketName is string && data.marketName.size() >= 2 && data.marketName.size() <= 100 &&
+             isValidId(data.ownerId) &&
+             data.name is string && data.name.size() >= 2 && data.name.size() <= 120 &&
+             data.normalizedName is string && data.normalizedName.size() >= 2 && data.normalizedName.size() <= 120 &&
+             isValidId(data.categoryId) &&
+             data.categoryName is string && data.categoryName.size() >= 2 && data.categoryName.size() <= 100 &&
+             data.description is string && data.description.size() >= 2 && data.description.size() <= 1000 &&
+             data.pricePkr is int && data.pricePkr > 0 && data.pricePkr <= 100000000 &&
+             data.originalPricePkr is int && data.originalPricePkr >= 0 && data.originalPricePkr <= 100000000 &&
+             data.stockQuantity is int && data.stockQuantity >= 0 && data.stockQuantity <= 1000000 &&
+             data.isAvailable is bool &&
+             data.isNewArrival is bool &&
+             data.isPopular is bool &&
+             (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() <= 800)) &&
+             data.whatsappNumber is string && data.whatsappNumber.size() >= 5 && data.whatsappNumber.size() <= 30 &&
+             data.status is string && (data.status == 'active' || data.status == 'suspended') &&
+             data.viewsCount is int && data.viewsCount >= 0 &&
+             data.inquiriesCount is int && data.inquiriesCount >= 0 &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidOffer(data) {
+      return data.keys().hasAll([
+               'shopId', 'shopName', 'marketName', 'ownerId', 'title', 'description',
+               'discountBadge', 'promoPricePkr', 'originalPricePkr', 'whatsappNumber',
+               'isActive', 'isFeatured', 'createdAt', 'updatedAt'
+             ]) &&
+             data.keys().hasOnly([
+               'shopId', 'shopName', 'marketName', 'ownerId', 'productId', 'title',
+               'description', 'discountBadge', 'promoPricePkr', 'originalPricePkr',
+               'whatsappNumber', 'isActive', 'isFeatured', 'createdAt', 'updatedAt'
+             ]) &&
+             isValidId(data.shopId) &&
+             data.shopName is string && data.shopName.size() >= 2 && data.shopName.size() <= 100 &&
+             data.marketName is string && data.marketName.size() >= 2 && data.marketName.size() <= 100 &&
+             isValidId(data.ownerId) &&
+             (!('productId' in data) || (data.productId is string && data.productId.size() <= 128)) &&
+             data.title is string && data.title.size() >= 3 && data.title.size() <= 120 &&
+             data.description is string && data.description.size() >= 3 && data.description.size() <= 500 &&
+             data.discountBadge is string && data.discountBadge.size() >= 2 && data.discountBadge.size() <= 40 &&
+             data.promoPricePkr is int && data.promoPricePkr > 0 && data.promoPricePkr <= 100000000 &&
+             data.originalPricePkr is int && data.originalPricePkr > 0 && data.originalPricePkr <= 100000000 &&
+             data.whatsappNumber is string && data.whatsappNumber.size() >= 5 && data.whatsappNumber.size() <= 30 &&
+             data.isActive is bool &&
+             data.isFeatured is bool &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidInquiry(data) {
+      return data.keys().hasAll([
+               'customerId', 'customerName', 'shopId', 'shopName', 'shopOwnerId',
+               'productName', 'displayedPricePkr', 'message', 'channel', 'status',
+               'shopkeeperReply', 'createdAt', 'updatedAt'
+             ]) &&
+             data.keys().hasOnly([
+               'customerId', 'customerName', 'customerPhone', 'shopId', 'shopName',
+               'shopOwnerId', 'productId', 'productName', 'displayedPricePkr',
+               'message', 'channel', 'status', 'shopkeeperReply', 'createdAt', 'updatedAt'
+             ]) &&
+             isValidId(data.customerId) &&
+             data.customerName is string && data.customerName.size() >= 1 && data.customerName.size() <= 100 &&
+             (!('customerPhone' in data) || (data.customerPhone is string && data.customerPhone.size() <= 30)) &&
+             isValidId(data.shopId) &&
+             data.shopName is string && data.shopName.size() >= 2 && data.shopName.size() <= 100 &&
+             isValidId(data.shopOwnerId) &&
+             (!('productId' in data) || (data.productId is string && data.productId.size() <= 128)) &&
+             data.productName is string && data.productName.size() >= 1 && data.productName.size() <= 120 &&
+             data.displayedPricePkr is int && data.displayedPricePkr >= 0 && data.displayedPricePkr <= 100000000 &&
+             data.message is string && data.message.size() >= 2 && data.message.size() <= 1000 &&
+             data.channel is string && (data.channel == 'whatsapp' || data.channel == 'in_app') &&
+             data.status is string && (data.status == 'new' || data.status == 'replied' || data.status == 'closed') &&
+             data.shopkeeperReply is string && data.shopkeeperReply.size() <= 1000 &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidReport(data) {
+      return data.keys().hasAll([
+               'reporterId', 'reporterName', 'targetType', 'targetId', 'targetName',
+               'shopId', 'reason', 'status', 'adminNotes', 'createdAt', 'updatedAt'
+             ]) &&
+             data.keys().hasOnly([
+               'reporterId', 'reporterName', 'targetType', 'targetId', 'targetName',
+               'shopId', 'reason', 'status', 'adminNotes', 'createdAt', 'updatedAt'
+             ]) &&
+             isValidId(data.reporterId) &&
+             data.reporterName is string && data.reporterName.size() >= 1 && data.reporterName.size() <= 100 &&
+             data.targetType is string && (data.targetType == 'product' || data.targetType == 'shop') &&
+             isValidId(data.targetId) &&
+             data.targetName is string && data.targetName.size() >= 1 && data.targetName.size() <= 120 &&
+             isValidId(data.shopId) &&
+             data.reason is string && data.reason.size() >= 3 && data.reason.size() <= 500 &&
+             data.status is string && (data.status == 'open' || data.status == 'resolved' || data.status == 'dismissed') &&
+             data.adminNotes is string && data.adminNotes.size() <= 500 &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    // 1. /admins/{adminId}
+    match /admins/{adminId} {
+      allow get: if isSignedIn() && isValidId(adminId) && (request.auth.uid == adminId || isAdmin());
+      allow list: if isAdmin();
+      allow create, update: if isSignedIn() && isValidId(adminId) && isValidAdminRecord(incoming()) && isAdmin();
+      allow delete: if isSignedIn() && isValidId(adminId) && isAdmin();
+    }
+
+    // 2. /users/{userId} - Strict PII Isolation
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (request.auth.uid == userId || isAdmin());
+      allow list: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn() &&
+                       isValidId(userId) &&
+                       request.auth.uid == userId &&
+                       incoming().userId == request.auth.uid &&
+                       isValidUserProfile(incoming()) &&
+                       incoming().isSuspended == false &&
+                       (incoming().role == 'customer' || incoming().role == 'shopkeeper' || isAdmin());
+
+      allow update: if isSignedIn() &&
+                       isValidId(userId) &&
+                       isValidUserProfile(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt && (
+                         // Action 1: Owner updates own profile or switches between customer & shopkeeper
+                         (request.auth.uid == userId &&
+                          existing().isSuspended == false &&
+                          incoming().isSuspended == existing().isSuspended &&
+                          (incoming().role == existing().role || incoming().role == 'customer' || incoming().role == 'shopkeeper') &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'phone', 'role', 'updatedAt'])) ||
+                         // Action 2: Admin updates user role or suspension state
+                         (isAdmin() &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'phone', 'role', 'isSuspended', 'updatedAt']))
+                       );
+
+      allow delete: if isSignedIn() && isValidId(userId) && isAdmin();
+    }
+
+    // 3. /markets/{marketId}
+    match /markets/{marketId} {
+      allow get: if isSignedIn() && isValidId(marketId) && (existing().isActive == true || isAdmin());
+      allow list: if isSignedIn() && (existing().isActive == true || isAdmin());
+
+      allow create: if isSignedIn() && isValidId(marketId) && isValidMarket(incoming()) && isAdmin();
+
+      allow update: if isSignedIn() &&
+                       isValidId(marketId) &&
+                       isValidMarket(incoming()) &&
+                       incoming().createdAt == existing().createdAt &&
+                       isAdmin() &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['name', 'city', 'address', 'description', 'isActive', 'updatedAt']);
+
+      allow delete: if isSignedIn() && isValidId(marketId) && isAdmin();
+    }
+
+    // 4. /categories/{categoryId}
+    match /categories/{categoryId} {
+      allow get: if isSignedIn() && isValidId(categoryId) && (existing().isActive == true || isAdmin());
+      allow list: if isSignedIn() && (existing().isActive == true || isAdmin());
+
+      allow create: if isSignedIn() && isValidId(categoryId) && isValidCategory(incoming()) && isAdmin();
+
+      allow update: if isSignedIn() &&
+                       isValidId(categoryId) &&
+                       isValidCategory(incoming()) &&
+                       incoming().createdAt == existing().createdAt &&
+                       isAdmin() &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['name', 'slug', 'iconName', 'description', 'displayOrder', 'isActive', 'updatedAt']);
+
+      allow delete: if isSignedIn() && isValidId(categoryId) && isAdmin();
+    }
+
+    // 5. /shops/{shopId}
+    match /shops/{shopId} {
+      allow get: if isSignedIn() && isValidId(shopId) && (
+        existing().status == 'approved' ||
+        existing().ownerId == request.auth.uid ||
+        isAdmin()
+      );
+      allow list: if isSignedIn() && (
+        existing().status == 'approved' ||
+        existing().ownerId == request.auth.uid ||
+        isAdmin()
+      );
+
+      allow create: if isSignedIn() &&
+                       isValidId(shopId) &&
+                       isValidShop(incoming()) &&
+                       incoming().ownerId == request.auth.uid &&
+                       incoming().viewsCount == 0 &&
+                       incoming().inquiriesCount == 0 &&
+                       ((incoming().status == 'pending' && incoming().isVerified == false && incoming().isFeatured == false) || isAdmin());
+
+      allow update: if isSignedIn() &&
+                       isValidId(shopId) &&
+                       isValidShop(incoming()) &&
+                       incoming().ownerId == existing().ownerId &&
+                       incoming().createdAt == existing().createdAt && (
+                         // Action 1: Shopkeeper updates own shop profile details
+                         (existing().ownerId == request.auth.uid &&
+                          existing().status != 'suspended' &&
+                          incoming().status == existing().status &&
+                          incoming().isVerified == existing().isVerified &&
+                          incoming().isFeatured == existing().isFeatured &&
+                          incoming().viewsCount == existing().viewsCount &&
+                          incoming().inquiriesCount == existing().inquiriesCount &&
+                          incoming().diff(existing()).affectedKeys().hasOnly([
+                            'name', 'categoryId', 'categoryName', 'marketId', 'marketName',
+                            'address', 'mapLocation', 'description', 'businessHours',
+                            'contactPhone', 'whatsappNumber', 'logoUrl', 'coverUrl', 'updatedAt'
+                          ])) ||
+                         // Action 2: Customer/visitor increments viewsCount or inquiriesCount on an approved shop
+                         (existing().status == 'approved' &&
+                          incoming().status == existing().status &&
+                          incoming().isVerified == existing().isVerified &&
+                          incoming().isFeatured == existing().isFeatured &&
+                          (incoming().viewsCount == existing().viewsCount || incoming().viewsCount == existing().viewsCount + 1) &&
+                          (incoming().inquiriesCount == existing().inquiriesCount || incoming().inquiriesCount == existing().inquiriesCount + 1) &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['viewsCount', 'inquiriesCount', 'updatedAt'])) ||
+                         // Action 3: Administrator approval, verification, featuring, or suspension
+                         (isAdmin() &&
+                          incoming().diff(existing()).affectedKeys().hasOnly([
+                            'name', 'categoryId', 'categoryName', 'marketId', 'marketName',
+                            'address', 'mapLocation', 'description', 'businessHours',
+                            'contactPhone', 'whatsappNumber', 'logoUrl', 'coverUrl',
+                            'status', 'isVerified', 'isFeatured', 'viewsCount', 'inquiriesCount', 'updatedAt'
+                          ]))
+                       );
+
+      allow delete: if isSignedIn() && isValidId(shopId) && (existing().ownerId == request.auth.uid || isAdmin());
+    }
+
+    // 6. /products/{productId}
+    match /products/{productId} {
+      allow get: if isSignedIn() && isValidId(productId) && (
+        existing().status == 'active' ||
+        existing().ownerId == request.auth.uid ||
+        isAdmin()
+      );
+      allow list: if isSignedIn() && (
+        existing().status == 'active' ||
+        existing().ownerId == request.auth.uid ||
+        isAdmin()
+      );
+
+      allow create: if isSignedIn() &&
+                       isValidId(productId) &&
+                       isValidProduct(incoming()) &&
+                       incoming().ownerId == request.auth.uid &&
+                       incoming().status == 'active' &&
+                       incoming().viewsCount == 0 &&
+                       incoming().inquiriesCount == 0 &&
+                       exists(/databases/$(database)/documents/shops/$(incoming().shopId)) && (
+                         (get(/databases/$(database)/documents/shops/$(incoming().shopId)).data.ownerId == request.auth.uid &&
+                          get(/databases/$(database)/documents/shops/$(incoming().shopId)).data.status == 'approved') ||
+                         isAdmin()
+                       );
+
+      allow update: if isSignedIn() &&
+                       isValidId(productId) &&
+                       isValidProduct(incoming()) &&
+                       incoming().ownerId == existing().ownerId &&
+                       incoming().shopId == existing().shopId &&
+                       incoming().createdAt == existing().createdAt && (
+                         // Action 1: Shopkeeper updates own product listing
+                         (existing().ownerId == request.auth.uid &&
+                          existing().status == 'active' &&
+                          incoming().status == existing().status &&
+                          incoming().viewsCount == existing().viewsCount &&
+                          incoming().inquiriesCount == existing().inquiriesCount &&
+                          incoming().diff(existing()).affectedKeys().hasOnly([
+                            'name', 'normalizedName', 'categoryId', 'categoryName',
+                            'description', 'pricePkr', 'originalPricePkr', 'stockQuantity',
+                            'isAvailable', 'isNewArrival', 'isPopular', 'imageUrl',
+                            'whatsappNumber', 'shopName', 'marketName', 'updatedAt'
+                          ])) ||
+                         // Action 2: Customer/visitor increments viewsCount or inquiriesCount
+                         (existing().status == 'active' &&
+                          incoming().status == existing().status &&
+                          (incoming().viewsCount == existing().viewsCount || incoming().viewsCount == existing().viewsCount + 1) &&
+                          (incoming().inquiriesCount == existing().inquiriesCount || incoming().inquiriesCount == existing().inquiriesCount + 1) &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['viewsCount', 'inquiriesCount', 'updatedAt'])) ||
+                         // Action 3: Admin moderation (suspend/restore/feature)
+                         (isAdmin() &&
+                          incoming().diff(existing()).affectedKeys().hasOnly([
+                            'name', 'normalizedName', 'categoryId', 'categoryName',
+                            'description', 'pricePkr', 'originalPricePkr', 'stockQuantity',
+                            'isAvailable', 'isNewArrival', 'isPopular', 'imageUrl',
+                            'whatsappNumber', 'shopName', 'marketName', 'status',
+                            'viewsCount', 'inquiriesCount', 'updatedAt'
+                          ]))
+                       );
+
+      allow delete: if isSignedIn() && isValidId(productId) && (existing().ownerId == request.auth.uid || isAdmin());
+    }
+
+    // 7. /offers/{offerId}
+    match /offers/{offerId} {
+      allow get: if isSignedIn() && isValidId(offerId) && (
+        existing().isActive == true ||
+        existing().ownerId == request.auth.uid ||
+        isAdmin()
+      );
+      allow list: if isSignedIn() && (
+        existing().isActive == true ||
+        existing().ownerId == request.auth.uid ||
+        isAdmin()
+      );
+
+      allow create: if isSignedIn() &&
+                       isValidId(offerId) &&
+                       isValidOffer(incoming()) &&
+                       incoming().ownerId == request.auth.uid &&
+                       (incoming().isFeatured == false || isAdmin()) &&
+                       exists(/databases/$(database)/documents/shops/$(incoming().shopId)) && (
+                         (get(/databases/$(database)/documents/shops/$(incoming().shopId)).data.ownerId == request.auth.uid &&
+                          get(/databases/$(database)/documents/shops/$(incoming().shopId)).data.status == 'approved') ||
+                         isAdmin()
+                       );
+
+      allow update: if isSignedIn() &&
+                       isValidId(offerId) &&
+                       isValidOffer(incoming()) &&
+                       incoming().ownerId == existing().ownerId &&
+                       incoming().shopId == existing().shopId &&
+                       incoming().createdAt == existing().createdAt && (
+                         // Action 1: Shopkeeper updates own offer
+                         (existing().ownerId == request.auth.uid &&
+                          incoming().isFeatured == existing().isFeatured &&
+                          incoming().diff(existing()).affectedKeys().hasOnly([
+                            'title', 'description', 'discountBadge', 'promoPricePkr',
+                            'originalPricePkr', 'whatsappNumber', 'productId', 'isActive',
+                            'shopName', 'marketName', 'updatedAt'
+                          ])) ||
+                         // Action 2: Admin features or moderates offer
+                         (isAdmin() &&
+                          incoming().diff(existing()).affectedKeys().hasOnly([
+                            'title', 'description', 'discountBadge', 'promoPricePkr',
+                            'originalPricePkr', 'whatsappNumber', 'productId', 'isActive',
+                            'isFeatured', 'shopName', 'marketName', 'updatedAt'
+                          ]))
+                       );
+
+      allow delete: if isSignedIn() && isValidId(offerId) && (existing().ownerId == request.auth.uid || isAdmin());
+    }
+
+    // 8. /inquiries/{inquiryId} - Customer & Shopkeeper Isolated
+    match /inquiries/{inquiryId} {
+      allow get: if isSignedIn() && isValidId(inquiryId) && (
+        existing().customerId == request.auth.uid ||
+        existing().shopOwnerId == request.auth.uid ||
+        isAdmin()
+      );
+      allow list: if isSignedIn() && (
+        existing().customerId == request.auth.uid ||
+        existing().shopOwnerId == request.auth.uid ||
+        isAdmin()
+      );
+
+      allow create: if isSignedIn() &&
+                       isValidId(inquiryId) &&
+                       isValidInquiry(incoming()) &&
+                       incoming().customerId == request.auth.uid &&
+                       incoming().status == 'new' &&
+                       incoming().shopkeeperReply == '' &&
+                       exists(/databases/$(database)/documents/shops/$(incoming().shopId));
+
+      allow update: if isSignedIn() &&
+                       isValidId(inquiryId) &&
+                       isValidInquiry(incoming()) &&
+                       incoming().customerId == existing().customerId &&
+                       incoming().shopId == existing().shopId &&
+                       incoming().shopOwnerId == existing().shopOwnerId &&
+                       incoming().createdAt == existing().createdAt && (
+                         // Action 1: Shopkeeper replies or updates status (Terminal state lock once 'closed')
+                         (existing().shopOwnerId == request.auth.uid &&
+                          existing().status != 'closed' &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'shopkeeperReply', 'updatedAt'])) ||
+                         // Action 2: Admin override
+                         (isAdmin() &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'shopkeeperReply', 'updatedAt']))
+                       );
+
+      allow delete: if isSignedIn() && isValidId(inquiryId) && isAdmin();
+    }
+
+    // 9. /reports/{reportId} - Reporter & Admin Isolated
+    match /reports/{reportId} {
+      allow get: if isSignedIn() && isValidId(reportId) && (
+        existing().reporterId == request.auth.uid ||
+        isAdmin()
+      );
+      allow list: if isSignedIn() && (
+        existing().reporterId == request.auth.uid ||
+        isAdmin()
+      );
+
+      allow create: if isSignedIn() &&
+                       isValidId(reportId) &&
+                       isValidReport(incoming()) &&
+                       incoming().reporterId == request.auth.uid &&
+                       incoming().status == 'open' &&
+                       incoming().adminNotes == '';
+
+      allow update: if isSignedIn() &&
+                       isValidId(reportId) &&
+                       isValidReport(incoming()) &&
+                       incoming().reporterId == existing().reporterId &&
+                       incoming().targetId == existing().targetId &&
+                       incoming().createdAt == existing().createdAt &&
+                       isAdmin() &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['status', 'adminNotes', 'updatedAt']);
+
+      allow delete: if isSignedIn() && isValidId(reportId) && isAdmin();
+    }
+  }
+}

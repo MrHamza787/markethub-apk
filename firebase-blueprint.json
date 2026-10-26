@@ -1,0 +1,246 @@
+{
+  "entities": {
+    "AdminRecord": {
+      "title": "AdminRecord",
+      "description": "Administrator registry record keyed by UID",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Admin UID" },
+        "email": { "type": "string", "description": "Admin email" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["uid", "email", "createdAt"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated user account and role record",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Auth UID" },
+        "displayName": { "type": "string", "description": "User full name" },
+        "email": { "type": "string", "description": "User email address" },
+        "role": { "type": "string", "enum": ["customer", "shopkeeper", "admin"], "description": "Platform role" },
+        "phone": { "type": "string", "description": "Contact phone number" },
+        "isSuspended": { "type": "boolean", "description": "Account suspension status" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp via FieldValue.serverTimestamp()" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp via FieldValue.serverTimestamp()" }
+      },
+      "required": ["userId", "displayName", "email", "role", "isSuspended", "createdAt", "updatedAt"]
+    },
+    "Market": {
+      "title": "Market",
+      "description": "Commercial market / bazaar directory entry",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Market name (e.g., Anarkali Bazaar)" },
+        "city": { "type": "string", "description": "City name (e.g., Lahore, Karachi, Islamabad)" },
+        "address": { "type": "string", "description": "Market street address" },
+        "description": { "type": "string", "description": "Overview of the commercial market" },
+        "isActive": { "type": "boolean", "description": "Whether the market is active" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp via FieldValue.serverTimestamp()" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp via FieldValue.serverTimestamp()" }
+      },
+      "required": ["name", "city", "address", "description", "isActive", "createdAt", "updatedAt"]
+    },
+    "Category": {
+      "title": "Category",
+      "description": "Shop and product category managed by administrators",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Category display name" },
+        "slug": { "type": "string", "description": "Normalized category key" },
+        "iconName": { "type": "string", "description": "Material icon identifier" },
+        "description": { "type": "string", "description": "Category subtitle" },
+        "displayOrder": { "type": "integer", "description": "Sort order" },
+        "isActive": { "type": "boolean", "description": "Whether category is visible to customers" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp via FieldValue.serverTimestamp()" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp via FieldValue.serverTimestamp()" }
+      },
+      "required": ["name", "slug", "iconName", "description", "displayOrder", "isActive", "createdAt", "updatedAt"]
+    },
+    "Shop": {
+      "title": "Shop",
+      "description": "Independent shop within a commercial market",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "description": "Shopkeeper Firebase UID" },
+        "ownerName": { "type": "string", "description": "Shopkeeper name" },
+        "name": { "type": "string", "description": "Shop business name" },
+        "categoryId": { "type": "string", "description": "Primary shop category ID" },
+        "categoryName": { "type": "string", "description": "Primary shop category label" },
+        "marketId": { "type": "string", "description": "Commercial market ID" },
+        "marketName": { "type": "string", "description": "Commercial market name" },
+        "address": { "type": "string", "description": "Shop plaza/lane/floor address" },
+        "mapLocation": { "type": "string", "description": "Map coordinates or landmark link" },
+        "description": { "type": "string", "description": "About the shop and specialties" },
+        "businessHours": { "type": "string", "description": "Opening and closing hours" },
+        "contactPhone": { "type": "string", "description": "Direct call number" },
+        "whatsappNumber": { "type": "string", "description": "WhatsApp number for inquiries" },
+        "logoUrl": { "type": "string", "description": "Shop logo image URL or data URI" },
+        "coverUrl": { "type": "string", "description": "Shop cover banner URL or data URI" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected", "suspended"], "description": "Admin approval state" },
+        "isVerified": { "type": "boolean", "description": "MarketHub verified badge" },
+        "isFeatured": { "type": "boolean", "description": "Featured on homepage" },
+        "viewsCount": { "type": "integer", "description": "Total shop page views" },
+        "inquiriesCount": { "type": "integer", "description": "Total inquiries received" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp via FieldValue.serverTimestamp()" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp via FieldValue.serverTimestamp()" }
+      },
+      "required": [
+        "ownerId", "ownerName", "name", "categoryId", "categoryName",
+        "marketId", "marketName", "address", "description", "businessHours",
+        "contactPhone", "whatsappNumber", "status", "isVerified", "isFeatured",
+        "viewsCount", "inquiriesCount", "createdAt", "updatedAt"
+      ]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Product listing in an approved shop with price in PKR",
+      "type": "object",
+      "properties": {
+        "shopId": { "type": "string", "description": "Parent shop ID" },
+        "shopName": { "type": "string", "description": "Parent shop name" },
+        "marketName": { "type": "string", "description": "Commercial market name" },
+        "ownerId": { "type": "string", "description": "Shopkeeper UID" },
+        "name": { "type": "string", "description": "Product title" },
+        "normalizedName": { "type": "string", "description": "Lowercase normalized product title for price comparison" },
+        "categoryId": { "type": "string", "description": "Category ID" },
+        "categoryName": { "type": "string", "description": "Category name" },
+        "description": { "type": "string", "description": "Product specifications and details" },
+        "pricePkr": { "type": "integer", "description": "Current price in PKR (Rs.)" },
+        "originalPricePkr": { "type": "integer", "description": "Original price before discount in PKR (0 if none)" },
+        "stockQuantity": { "type": "integer", "description": "Available stock units" },
+        "isAvailable": { "type": "boolean", "description": "Explicitly marked in stock by shopkeeper" },
+        "isNewArrival": { "type": "boolean", "description": "Highlighted in New Arrivals" },
+        "isPopular": { "type": "boolean", "description": "Highlighted in Popular Products" },
+        "imageUrl": { "type": "string", "description": "Product photo URL or data URI" },
+        "whatsappNumber": { "type": "string", "description": "Shopkeeper WhatsApp number" },
+        "status": { "type": "string", "enum": ["active", "suspended"], "description": "Moderation status" },
+        "viewsCount": { "type": "integer", "description": "Product detail views" },
+        "inquiriesCount": { "type": "integer", "description": "WhatsApp and in-app inquiries count" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp via FieldValue.serverTimestamp()" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp via FieldValue.serverTimestamp()" }
+      },
+      "required": [
+        "shopId", "shopName", "marketName", "ownerId", "name", "normalizedName",
+        "categoryId", "categoryName", "description", "pricePkr", "originalPricePkr",
+        "stockQuantity", "isAvailable", "isNewArrival", "isPopular", "whatsappNumber",
+        "status", "viewsCount", "inquiriesCount", "createdAt", "updatedAt"
+      ]
+    },
+    "Offer": {
+      "title": "Offer",
+      "description": "Special promotional discount or daily deal published by a shop",
+      "type": "object",
+      "properties": {
+        "shopId": { "type": "string", "description": "Shop ID" },
+        "shopName": { "type": "string", "description": "Shop name" },
+        "marketName": { "type": "string", "description": "Market name" },
+        "ownerId": { "type": "string", "description": "Shopkeeper UID" },
+        "productId": { "type": "string", "description": "Optional linked product ID" },
+        "title": { "type": "string", "description": "Offer headline" },
+        "description": { "type": "string", "description": "Offer terms and details" },
+        "discountBadge": { "type": "string", "description": "Badge text e.g. 25% OFF" },
+        "promoPricePkr": { "type": "integer", "description": "Offer price in PKR" },
+        "originalPricePkr": { "type": "integer", "description": "Regular price in PKR" },
+        "whatsappNumber": { "type": "string", "description": "Shop WhatsApp number" },
+        "isActive": { "type": "boolean", "description": "Whether offer is active" },
+        "isFeatured": { "type": "boolean", "description": "Featured by admin on homepage" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp via FieldValue.serverTimestamp()" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp via FieldValue.serverTimestamp()" }
+      },
+      "required": [
+        "shopId", "shopName", "marketName", "ownerId", "title", "description",
+        "discountBadge", "promoPricePkr", "originalPricePkr", "whatsappNumber",
+        "isActive", "isFeatured", "createdAt", "updatedAt"
+      ]
+    },
+    "Inquiry": {
+      "title": "Inquiry",
+      "description": "Customer product/shop inquiry via WhatsApp or in-app message",
+      "type": "object",
+      "properties": {
+        "customerId": { "type": "string", "description": "Customer UID" },
+        "customerName": { "type": "string", "description": "Customer display name" },
+        "customerPhone": { "type": "string", "description": "Optional customer phone" },
+        "shopId": { "type": "string", "description": "Target shop ID" },
+        "shopName": { "type": "string", "description": "Target shop name" },
+        "shopOwnerId": { "type": "string", "description": "Target shopkeeper UID" },
+        "productId": { "type": "string", "description": "Optional product ID" },
+        "productName": { "type": "string", "description": "Product name or General Shop Inquiry" },
+        "displayedPricePkr": { "type": "integer", "description": "Displayed price in PKR at time of inquiry" },
+        "message": { "type": "string", "description": "Customer inquiry message" },
+        "channel": { "type": "string", "enum": ["whatsapp", "in_app"], "description": "Contact channel" },
+        "status": { "type": "string", "enum": ["new", "replied", "closed"], "description": "Inquiry lifecycle state" },
+        "shopkeeperReply": { "type": "string", "description": "Reply from shopkeeper" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp via FieldValue.serverTimestamp()" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp via FieldValue.serverTimestamp()" }
+      },
+      "required": [
+        "customerId", "customerName", "shopId", "shopName", "shopOwnerId",
+        "productName", "displayedPricePkr", "message", "channel", "status",
+        "shopkeeperReply", "createdAt", "updatedAt"
+      ]
+    },
+    "Report": {
+      "title": "Report",
+      "description": "Customer report of a fraudulent or inappropriate shop or product listing",
+      "type": "object",
+      "properties": {
+        "reporterId": { "type": "string", "description": "Reporting user UID" },
+        "reporterName": { "type": "string", "description": "Reporting user name" },
+        "targetType": { "type": "string", "enum": ["product", "shop"], "description": "Entity type being reported" },
+        "targetId": { "type": "string", "description": "Reported entity ID" },
+        "targetName": { "type": "string", "description": "Reported entity name" },
+        "shopId": { "type": "string", "description": "Related shop ID" },
+        "reason": { "type": "string", "description": "Reason for report" },
+        "status": { "type": "string", "enum": ["open", "resolved", "dismissed"], "description": "Admin moderation status" },
+        "adminNotes": { "type": "string", "description": "Resolution notes by admin" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp via FieldValue.serverTimestamp()" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp via FieldValue.serverTimestamp()" }
+      },
+      "required": [
+        "reporterId", "reporterName", "targetType", "targetId", "targetName",
+        "shopId", "reason", "status", "adminNotes", "createdAt", "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/admins/{adminId}": {
+      "schema": { "$ref": "#/entities/AdminRecord" },
+      "description": "Trusted administrator UIDs"
+    },
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private user account profiles with role and PII isolation"
+    },
+    "/markets/{marketId}": {
+      "schema": { "$ref": "#/entities/Market" },
+      "description": "Commercial markets and bazaars"
+    },
+    "/categories/{categoryId}": {
+      "schema": { "$ref": "#/entities/Category" },
+      "description": "Marketplace shop and product categories"
+    },
+    "/shops/{shopId}": {
+      "schema": { "$ref": "#/entities/Shop" },
+      "description": "Independent shop profiles and approval states"
+    },
+    "/products/{productId}": {
+      "schema": { "$ref": "#/entities/Product" },
+      "description": "Products offered by approved shops with PKR pricing"
+    },
+    "/offers/{offerId}": {
+      "schema": { "$ref": "#/entities/Offer" },
+      "description": "Promotional discounts and daily offers"
+    },
+    "/inquiries/{inquiryId}": {
+      "schema": { "$ref": "#/entities/Inquiry" },
+      "description": "Customer inquiries to shopkeepers"
+    },
+    "/reports/{reportId}": {
+      "schema": { "$ref": "#/entities/Report" },
+      "description": "Reported listings for administrator review"
+    }
+  }
+}

@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="800dp"
+    android:height="450dp"
+    android:viewportWidth="800"
+    android:viewportHeight="450">
+    <!-- Deep Emerald Sky / Atrium Background -->
+    <path android:pathData="M0,0h800v450h-800z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="0"
+                android:startY="0"
+                android:endX="800"
+                android:endY="450"
+                android:type="linear">
+                <item android:color="#052E24" android:offset="0.0" />
+                <item android:color="#0A4D3C" android:offset="0.55" />
+                <item android:color="#0F6B53" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Decorative Warm Glow Circles -->
+    <path
+        android:fillAlpha="0.16"
+        android:fillColor="#F59E0B"
+        android:pathData="M650,90m-160,0a160,160 0,1 1,320 0a160,160 0,1 1,-320 0" />
+    <path
+        android:fillAlpha="0.10"
+        android:fillColor="#34D399"
+        android:pathData="M140,360m-140,0a140,140 0,1 1,280 0a140,140 0,1 1,-280 0" />
+
+    <!-- Architectural Bazaar Arches -->
+    <path
+        android:fillAlpha="0.22"
+        android:fillColor="#FFFFFF"
+        android:pathData="M60,450 L60,210 C60,145 140,115 190,115 C240,115 320,145 320,210 L320,450 Z" />
+    <path
+        android:fillAlpha="0.18"
+        android:fillColor="#FFFFFF"
+        android:pathData="M340,450 L340,190 C340,120 430,85 490,85 C550,85 640,120 640,190 L640,450 Z" />
+
+    <!-- Storefront Awning 1 (Left) -->
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M85,250 L295,250 L308,285 L72,285 Z" />
+    <path
+        android:fillAlpha="0.92"
+        android:fillColor="#FFFFFF"
+        android:pathData="M90,285 L290,285 L290,410 L90,410 Z" />
+    <path
+        android:fillColor="#0A4D3C"
+        android:pathData="M110,305 L210,305 L210,385 L110,385 Z" />
+    <path
+        android:fillColor="#D97706"
+        android:pathData="M225,305 L275,305 L275,410 L225,410 Z" />
+
+    <!-- Storefront Awning 2 (Center-Right) -->
+    <path
+        android:fillColor="#10B981"
+        android:pathData="M370,235 L610,235 L625,275 L355,275 Z" />
+    <path
+        android:fillAlpha="0.95"
+        android:fillColor="#FFFFFF"
+        android:pathData="M375,275 L605,275 L605,410 L375,410 Z" />
+    <path
+        android:fillColor="#063B2D"
+        android:pathData="M395,295 L515,295 L515,380 L395,380 Z" />
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M530,295 L585,295 L585,410 L530,410 Z" />
+
+    <!-- Floating PKR Price Comparison Tag Badge -->
+    <path
+        android:fillColor="#FBBF24"
+        android:pathData="M580,110 L745,110 C755,110 762,117 762,127 L762,195 C762,205 755,212 745,212 L580,212 C570,212 563,205 563,195 L563,127 C563,117 570,110 580,110 Z" />
+    <path
+        android:fillColor="#052E24"
+        android:pathData="M585,138 L715,138 L715,152 L585,152 Z" />
+    <path
+        android:fillColor="#0A4D3C"
+        android:pathData="M585,166 L685,166 L685,180 L585,180 Z" />
+
+    <!-- Promenade Floor -->
+    <path
+        android:fillColor="#04221B"
+        android:pathData="M0,410 L800,410 L800,450 L0,450 Z" />
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M0,406 L800,406 L800,412 L0,412 Z" />
+</vector>

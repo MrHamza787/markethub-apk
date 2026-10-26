@@ -1,0 +1,17 @@
+<resources>
+    <string name="app_name">MarketHub</string>
+    <string name="tagline_bazaar">Pakistan\'s Multi-Market Shopping &amp; Price Comparison Hub</string>
+    <string name="sign_in_google">Sign in with Google</string>
+    <string name="sign_out">Sign Out</string>
+    <string name="search_placeholder">Search products, shops, or categories...</string>
+    <string name="tab_explore">Explore</string>
+    <string name="tab_shops">Shops</string>
+    <string name="tab_compare">Compare</string>
+    <string name="tab_shopkeeper">My Shop</string>
+    <string name="tab_admin">Admin</string>
+    <string name="tab_account">Account</string>
+    <string name="whatsapp_inquire">Inquire on WhatsApp</string>
+    <string name="verified_shop">Verified Shop</string>
+    <string name="in_stock">In Stock</string>
+    <string name="out_of_stock">Unavailable</string>
+</resources>

@@ -1,0 +1,6 @@
+{
+  "name": "MarketHub",
+  "description": "Multi-vendor commercial market marketplace for exploring local shops, comparing product prices in PKR, contacting shopkeepers via WhatsApp, and managing shops.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

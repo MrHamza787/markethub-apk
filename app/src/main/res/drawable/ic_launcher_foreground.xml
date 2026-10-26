@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Golden Awning / Roof -->
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M30,32 L78,32 L82,46 L26,46 Z" />
+    <!-- Scalloped Awning Trim -->
+    <path
+        android:fillColor="#FBBF24"
+        android:pathData="M26,46 C26,51 35,51 35,46 C35,51 44,51 44,46 C44,51 54,51 54,46 C54,51 64,51 64,46 C64,51 73,51 73,46 C73,51 82,51 82,46 Z" />
+    <!-- Storefront Body -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M32,50 L76,50 L76,78 L62,78 L62,60 L46,60 L46,78 L32,78 Z" />
+    <!-- Storefront Base Bar -->
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M28,76 L80,76 L80,80 L28,80 Z" />
+</vector>
