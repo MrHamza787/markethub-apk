@@ -62,13 +62,16 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.data.model.Offer
+import com.example.data.model.Order
 import com.example.data.model.Product
 import com.example.data.model.Shop
+import com.example.data.model.buildWhatsAppDirectPurchaseOrderMessage
 import com.example.data.repository.MarketHubRepository
 import com.example.ui.auth.AuthScreen
 import com.example.ui.auth.signOut
 import com.example.ui.components.CustomerInquiryModal
 import com.example.ui.components.ReportListingDialog
+import com.example.ui.components.WhatsAppDirectCheckoutDialog
 import com.example.ui.components.buildWhatsAppPreFilledMessage
 import com.example.ui.components.launchWhatsAppIntent
 import com.example.ui.screens.AccountAndInquiriesScreen
@@ -192,16 +195,20 @@ fun MarketHubAuthenticatedApp(viewModel: MarketHubViewModel) {
     val activeOffersState by viewModel.activeOffersState.collectAsStateWithLifecycle()
     val filteredProducts by viewModel.filteredProducts.collectAsStateWithLifecycle()
     val comparisonGroups by viewModel.priceComparisonGroups.collectAsStateWithLifecycle()
+    val paymentSettings by viewModel.paymentSettings.collectAsStateWithLifecycle()
 
     val myShops by viewModel.myShops.collectAsStateWithLifecycle()
     val myProducts by viewModel.myProducts.collectAsStateWithLifecycle()
     val myOffers by viewModel.myOffers.collectAsStateWithLifecycle()
     val customerInquiries by viewModel.customerInquiries.collectAsStateWithLifecycle()
     val shopkeeperInquiries by viewModel.shopkeeperInquiries.collectAsStateWithLifecycle()
+    val customerOrders by viewModel.customerOrders.collectAsStateWithLifecycle()
+    val shopkeeperOrders by viewModel.shopkeeperOrders.collectAsStateWithLifecycle()
 
     val allShopsAdmin by viewModel.allShopsAdmin.collectAsStateWithLifecycle()
     val allProductsAdmin by viewModel.allProductsAdmin.collectAsStateWithLifecycle()
     val allReportsAdmin by viewModel.allReportsAdmin.collectAsStateWithLifecycle()
+    val allOrdersAdmin by viewModel.allOrdersAdmin.collectAsStateWithLifecycle()
 
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val selectedCategoryId by viewModel.selectedCategoryId.collectAsStateWithLifecycle()
@@ -216,6 +223,7 @@ fun MarketHubAuthenticatedApp(viewModel: MarketHubViewModel) {
     var subDestination by remember { mutableStateOf<SubDestination?>(null) }
     var activeInquiryTarget by remember { mutableStateOf<InquiryTarget?>(null) }
     var activeReportTarget by remember { mutableStateOf<ReportTarget?>(null) }
+    var activeBuyNowProduct by remember { mutableStateOf<Product?>(null) }
 
     val visibleSections = remember(isAdmin) {
         if (isAdmin) MarketHubSection.entries
@@ -256,6 +264,15 @@ fun MarketHubAuthenticatedApp(viewModel: MarketHubViewModel) {
             productId = offer.productId,
             productName = "${offer.title} (${offer.discountBadge})",
             displayedPricePkr = offer.promoPricePkr
+        )
+    }
+
+    fun openWhatsAppForOrder(order: Order) {
+        val message = buildWhatsAppDirectPurchaseOrderMessage(order)
+        launchWhatsAppIntent(
+            context = context,
+            rawWhatsAppNumber = order.shopWhatsappNumber,
+            message = message
         )
     }
 
@@ -425,7 +442,8 @@ fun MarketHubAuthenticatedApp(viewModel: MarketHubViewModel) {
                                                     targetName = s.name,
                                                     shopId = s.id
                                                 )
-                                            }
+                                            },
+                                            onBuyNowProduct = { activeBuyNowProduct = it }
                                         )
                                     } else {
                                         subDestination = null
@@ -463,7 +481,8 @@ fun MarketHubAuthenticatedApp(viewModel: MarketHubViewModel) {
                                                 targetName = p.name,
                                                 shopId = p.shopId
                                             )
-                                        }
+                                        },
+                                        onBuyNowProduct = { activeBuyNowProduct = it }
                                     )
                                 }
                             }
@@ -510,7 +529,8 @@ fun MarketHubAuthenticatedApp(viewModel: MarketHubViewModel) {
                                         onWhatsAppShop = { openWhatsAppForShop(it) },
                                         onWhatsAppOffer = { openWhatsAppForOffer(it) },
                                         onNavigateToCompareTab = { currentSection = MarketHubSection.COMPARE },
-                                        onNavigateToShopkeeperTab = { currentSection = MarketHubSection.SHOPKEEPER }
+                                        onNavigateToShopkeeperTab = { currentSection = MarketHubSection.SHOPKEEPER },
+                                        onBuyNowProduct = { activeBuyNowProduct = it }
                                     )
                                 }
 
@@ -543,7 +563,8 @@ fun MarketHubAuthenticatedApp(viewModel: MarketHubViewModel) {
                                         onOpenShopDetail = { shopId ->
                                             subDestination = SubDestination.ShopPage(shopId)
                                         },
-                                        onWhatsAppProduct = { openWhatsAppForProduct(it) }
+                                        onWhatsAppProduct = { openWhatsAppForProduct(it) },
+                                        onBuyNowProduct = { activeBuyNowProduct = it }
                                     )
                                 }
 
@@ -553,6 +574,8 @@ fun MarketHubAuthenticatedApp(viewModel: MarketHubViewModel) {
                                         myProducts = myProducts,
                                         myOffers = myOffers,
                                         shopkeeperInquiries = shopkeeperInquiries,
+                                        shopkeeperOrders = shopkeeperOrders,
+                                        paymentSettings = paymentSettings,
                                         categories = categories,
                                         markets = markets,
                                         isBusy = isBusy,
@@ -577,7 +600,8 @@ fun MarketHubAuthenticatedApp(viewModel: MarketHubViewModel) {
                                             viewModel.publishOffer(shop, title, desc, badge, promoP, origP)
                                         },
                                         onDeleteOffer = viewModel::deleteOffer,
-                                        onReplyToInquiry = viewModel::replyToCustomerInquiry
+                                        onReplyToInquiry = viewModel::replyToCustomerInquiry,
+                                        onUpdateOrderStatus = viewModel::verifyOrUpdateOrderStatus
                                     )
                                 }
 
@@ -588,6 +612,8 @@ fun MarketHubAuthenticatedApp(viewModel: MarketHubViewModel) {
                                         allProducts = allProductsAdmin,
                                         allOffers = activeOffers,
                                         allReports = allReportsAdmin,
+                                        allOrders = allOrdersAdmin,
+                                        paymentSettings = paymentSettings,
                                         categories = categories,
                                         markets = markets,
                                         onModerateShop = viewModel::moderateShopAsAdmin,
@@ -596,7 +622,9 @@ fun MarketHubAuthenticatedApp(viewModel: MarketHubViewModel) {
                                         onSaveCategory = viewModel::saveCategoryAsAdmin,
                                         onDeleteCategory = viewModel::deleteCategoryAsAdmin,
                                         onSaveMarket = viewModel::saveMarketAsAdmin,
-                                        onResolveReport = viewModel::resolveReportAsAdmin
+                                        onResolveReport = viewModel::resolveReportAsAdmin,
+                                        onVerifyOrderPayment = viewModel::verifyOrUpdateOrderStatus,
+                                        onSavePaymentSettings = viewModel::savePaymentSettingsAsAdmin
                                     )
                                 }
 
@@ -607,7 +635,11 @@ fun MarketHubAuthenticatedApp(viewModel: MarketHubViewModel) {
                                         fallbackEmail = viewModel.currentUserEmail,
                                         isAdmin = isAdmin,
                                         customerInquiries = customerInquiries,
+                                        customerOrders = customerOrders,
+                                        paymentSettings = paymentSettings,
                                         onUpdateProfile = viewModel::updateProfile,
+                                        onOpenOrderWhatsApp = { openWhatsAppForOrder(it) },
+                                        onSubmitOrderProof = viewModel::submitOrderPaymentProof,
                                         onSignOut = {
                                             signOut(
                                                 context = context,
@@ -624,6 +656,40 @@ fun MarketHubAuthenticatedApp(viewModel: MarketHubViewModel) {
                 }
             }
         }
+    }
+
+    // Buy Now to WhatsApp Direct Purchase Checkout Dialog
+    activeBuyNowProduct?.let { targetProduct ->
+        val freshProduct = activeProducts.find { it.id == targetProduct.id } ?: targetProduct
+        WhatsAppDirectCheckoutDialog(
+            product = freshProduct,
+            paymentSettings = paymentSettings,
+            defaultCustomerName = userProfile?.displayName?.ifBlank { viewModel.currentUserName } ?: viewModel.currentUserName,
+            defaultCustomerPhone = userProfile?.phone ?: "",
+            isBusy = isBusy,
+            onDismiss = { activeBuyNowProduct = null },
+            onConfirmAndCreateOrder = { idempotencyKey, quantity, customerName, customerPhone, deliveryType, deliveryAddress, paymentMethod, onOrderSaved ->
+                viewModel.placeDirectPurchaseOrder(
+                    idempotencyKey = idempotencyKey,
+                    productId = freshProduct.id,
+                    quantity = quantity,
+                    customerName = customerName,
+                    customerPhone = customerPhone,
+                    deliveryType = deliveryType,
+                    deliveryAddress = deliveryAddress,
+                    paymentMethod = paymentMethod,
+                    onOrderCreated = onOrderSaved
+                )
+            },
+            onSubmitPaymentProof = { orderId, tid, screenshotUri, onDone ->
+                viewModel.submitOrderPaymentProof(
+                    orderId = orderId,
+                    transactionReference = tid,
+                    proofScreenshotUri = screenshotUri,
+                    onSuccess = onDone
+                )
+            }
+        )
     }
 
     // Customer Inquiry + WhatsApp Launch Modal

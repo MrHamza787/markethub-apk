@@ -161,7 +161,6 @@ test("3. Shopkeeper can submit pending shop, cannot self-approve, Admin can appr
 
 test("4. Product creation requires approved shop, enforces cross-shopkeeper isolation and price validation", async () => {
   const ts = nowTs();
-  // Seed one pending shop and one approved shop for SHOPKEEPER_1_UID
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
     const db = ctx.firestore();
     await db.collection("shops").doc("pending_shop").set({
@@ -343,6 +342,171 @@ test("5. Inquiries and Reports enforce ownership and terminal state locking", as
   await assertFails(
     sk1Db.collection("inquiries").doc("inq_1").update({
       status: "replied",
+      updatedAt: new Date(),
+    })
+  );
+});
+
+test("6. WhatsApp Direct Purchase Orders validate backend price/stock and enforce payment verification permissions", async () => {
+  const ts = nowTs();
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await db.collection("shops").doc("approved_shop").set({
+      ownerId: SHOPKEEPER_1_UID,
+      ownerName: "Tariq",
+      name: "Approved Shop",
+      categoryId: "cat_mobile",
+      categoryName: "Mobile phones and accessories",
+      marketId: "mkt_hafeez",
+      marketName: "Hafeez Center",
+      address: "Shop 12, Lahore",
+      description: "Approved shop test",
+      businessHours: "10am - 9pm",
+      contactPhone: "+923001234567",
+      whatsappNumber: "923001234567",
+      status: "approved",
+      isVerified: true,
+      isFeatured: false,
+      viewsCount: 0,
+      inquiriesCount: 0,
+      createdAt: ts,
+      updatedAt: ts,
+    });
+    await db.collection("products").doc("prod_1").set({
+      shopId: "approved_shop",
+      shopName: "Approved Shop",
+      marketName: "Hafeez Center",
+      ownerId: SHOPKEEPER_1_UID,
+      name: "Samsung Galaxy A55 5G 256GB",
+      normalizedName: "samsung galaxy a55 5g 256gb",
+      categoryId: "cat_mobile",
+      categoryName: "Mobile phones and accessories",
+      description: "Official PTA approved with 1 year warranty.",
+      pricePkr: 135000,
+      originalPricePkr: 140000,
+      stockQuantity: 5,
+      isAvailable: true,
+      isNewArrival: true,
+      isPopular: true,
+      imageUrl: "",
+      whatsappNumber: "923001234567",
+      status: "active",
+      viewsCount: 0,
+      inquiriesCount: 0,
+      createdAt: ts,
+      updatedAt: ts,
+    });
+  });
+
+  const customerDb = testEnv.authenticatedContext(CUSTOMER_UID).firestore();
+  const realAdminDb = testEnv
+    .authenticatedContext(ADMIN_UID, { email: "awan11118@gmail.com", email_verified: true })
+    .firestore();
+
+  // Customer cannot configure payment_settings
+  const paymentSettingsPayload = {
+    bankTransferEnabled: true,
+    bankName: "Meezan Bank",
+    bankAccountTitle: "MarketHub Verified Escrow",
+    bankAccountNumberOrIban: "PK36MEZN0001234567890101",
+    bankInstructions: "Include your Order Reference in transfer remarks.",
+    easypaisaEnabled: true,
+    easypaisaAccountHolderName: "MarketHub Merchant",
+    easypaisaMobileNumber: "03001234567",
+    easypaisaInstructions: "Send payment and upload TID screenshot.",
+    binancePayEnabled: true,
+    binanceMerchantName: "MarketHub Official",
+    binancePayIdOrInstructions: "Binance Pay ID: 284910293 (Manual verification)",
+    codEnabledByDefault: true,
+    allowShopkeeperPaymentVerification: false,
+    updatedByUid: ADMIN_UID,
+    updatedAt: ts,
+  };
+  await assertFails(
+    customerDb.collection("payment_settings").doc("global").set({
+      ...paymentSettingsPayload,
+      updatedByUid: CUSTOMER_UID,
+    })
+  );
+  // Admin CAN configure payment_settings
+  await assertSucceeds(
+    realAdminDb.collection("payment_settings").doc("global").set(paymentSettingsPayload)
+  );
+
+  const validOrder = {
+    orderNumber: "MH-20261026-1001",
+    idempotencyKey: "idem_customer_1_prod_1_001",
+    customerId: CUSTOMER_UID,
+    customerName: "Ayesha Khan",
+    customerPhone: "+923001112233",
+    deliveryType: "delivery",
+    deliveryAddress: "House 14, Block B, Model Town, Lahore",
+    productId: "prod_1",
+    productName: "Samsung Galaxy A55 5G 256GB",
+    shopId: "approved_shop",
+    shopName: "Approved Shop",
+    shopOwnerId: SHOPKEEPER_1_UID,
+    shopWhatsappNumber: "923001234567",
+    quantity: 2,
+    unitPricePkr: 135000,
+    subtotalPkr: 270000,
+    paymentMethod: "BANK_TRANSFER",
+    paymentStatus: "Awaiting Payment",
+    orderStatus: "pending",
+    transactionReference: "",
+    proofScreenshotUri: "",
+    verifierNotes: "",
+    verifiedByUid: "",
+    createdAt: ts,
+    updatedAt: ts,
+  };
+
+  // Forged unitPricePkr or subtotalPkr fails backend validation!
+  await assertFails(
+    customerDb.collection("orders").doc("ord_forged_price").set({
+      ...validOrder,
+      unitPricePkr: 1000,
+      subtotalPkr: 2000,
+    })
+  );
+
+  // Quantity exceeding product stockQuantity (5) fails backend validation!
+  await assertFails(
+    customerDb.collection("orders").doc("ord_excess_qty").set({
+      ...validOrder,
+      quantity: 10,
+      subtotalPkr: 1350000,
+    })
+  );
+
+  // Valid order matching backend product price and stock succeeds
+  await assertSucceeds(customerDb.collection("orders").doc("ord_1").set(validOrder));
+
+  // Customer can submit payment proof (Proof Submitted)
+  await assertSucceeds(
+    customerDb.collection("orders").doc("ord_1").update({
+      transactionReference: "MEEZAN-TID-99887766",
+      proofScreenshotUri: "content://media/picker/0/com.android.providers.media.photopicker/media/1001",
+      paymentStatus: "Proof Submitted",
+      updatedAt: new Date(),
+    })
+  );
+
+  // Customer CANNOT self-verify payment
+  await assertFails(
+    customerDb.collection("orders").doc("ord_1").update({
+      paymentStatus: "Payment Verified",
+      updatedAt: new Date(),
+    })
+  );
+
+  // Authorized Admin CAN verify payment
+  await assertSucceeds(
+    realAdminDb.collection("orders").doc("ord_1").update({
+      paymentStatus: "Payment Verified",
+      orderStatus: "confirmed",
+      verifierNotes: "Verified Meezan Bank transfer TID-99887766",
+      verifiedByUid: ADMIN_UID,
       updatedAt: new Date(),
     })
   );

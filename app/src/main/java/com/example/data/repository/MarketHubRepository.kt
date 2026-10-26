@@ -7,6 +7,8 @@ import com.example.data.model.Inquiry
 import com.example.data.model.Market
 import com.example.data.model.MarketHubDefaults
 import com.example.data.model.Offer
+import com.example.data.model.Order
+import com.example.data.model.PaymentSettings
 import com.example.data.model.Product
 import com.example.data.model.Report
 import com.example.data.model.Shop
@@ -1005,6 +1007,308 @@ class MarketHubRepository(private val db: FirebaseFirestore) {
                 mapOf(
                     "status" to status,
                     "adminNotes" to adminNotes.trim().take(500),
+                    "updatedAt" to FieldValue.serverTimestamp()
+                )
+            ).await()
+            Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.UPDATE, docRef.path)
+            Result.failure(e)
+        }
+    }
+
+    // --- PAYMENT SETTINGS (ADMIN CONFIGURED) ---
+
+    fun observePaymentSettings(): Flow<PaymentSettings> {
+        val path = "payment_settings/global"
+        return db.collection("payment_settings").document("global")
+            .snapshots()
+            .map { snapshot ->
+                if (snapshot.exists()) {
+                    snapshot.toObject(PaymentSettings::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
+                        ?: PaymentSettings()
+                } else {
+                    PaymentSettings()
+                }
+            }
+            .catch { error ->
+                if (error is Exception) handleFirestoreError(error, OperationType.GET, path)
+                emit(PaymentSettings())
+            }
+    }
+
+    suspend fun savePaymentSettingsAsAdmin(
+        bankTransferEnabled: Boolean,
+        bankName: String,
+        bankAccountTitle: String,
+        bankAccountNumberOrIban: String,
+        bankInstructions: String,
+        easypaisaEnabled: Boolean,
+        easypaisaAccountHolderName: String,
+        easypaisaMobileNumber: String,
+        easypaisaInstructions: String,
+        binancePayEnabled: Boolean,
+        binanceMerchantName: String,
+        binancePayIdOrInstructions: String,
+        codEnabledByDefault: Boolean,
+        allowShopkeeperPaymentVerification: Boolean
+    ): Result<Unit> {
+        val uid = requireUserId()
+        val docRef = db.collection("payment_settings").document("global")
+        val payload = mapOf(
+            "bankTransferEnabled" to bankTransferEnabled,
+            "bankName" to bankName.trim().take(120),
+            "bankAccountTitle" to bankAccountTitle.trim().take(120),
+            "bankAccountNumberOrIban" to bankAccountNumberOrIban.trim().take(80),
+            "bankInstructions" to bankInstructions.trim().take(600),
+            "easypaisaEnabled" to easypaisaEnabled,
+            "easypaisaAccountHolderName" to easypaisaAccountHolderName.trim().take(120),
+            "easypaisaMobileNumber" to easypaisaMobileNumber.trim().take(40),
+            "easypaisaInstructions" to easypaisaInstructions.trim().take(600),
+            "binancePayEnabled" to binancePayEnabled,
+            "binanceMerchantName" to binanceMerchantName.trim().take(120),
+            "binancePayIdOrInstructions" to binancePayIdOrInstructions.trim().take(600),
+            "codEnabledByDefault" to codEnabledByDefault,
+            "allowShopkeeperPaymentVerification" to allowShopkeeperPaymentVerification,
+            "updatedByUid" to uid,
+            "updatedAt" to FieldValue.serverTimestamp()
+        )
+        return try {
+            docRef.set(payload).await()
+            Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.WRITE, docRef.path)
+            Result.failure(e)
+        }
+    }
+
+    // --- WHATSAPP DIRECT PURCHASE ORDERS ---
+
+    fun observeCustomerOrders(customerId: String): Flow<List<Order>> {
+        val path = "orders"
+        return db.collection(path)
+            .whereEqualTo("customerId", customerId)
+            .snapshots()
+            .map { snapshot ->
+                snapshot.toObjects(Order::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
+                    .sortedByDescending { it.createdAt?.seconds ?: 0L }
+            }
+            .catch { error ->
+                if (error is Exception) handleFirestoreError(error, OperationType.LIST, path)
+                throw error
+            }
+    }
+
+    fun observeShopkeeperOrders(shopOwnerId: String): Flow<List<Order>> {
+        val path = "orders"
+        return db.collection(path)
+            .whereEqualTo("shopOwnerId", shopOwnerId)
+            .snapshots()
+            .map { snapshot ->
+                snapshot.toObjects(Order::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
+                    .sortedByDescending { it.createdAt?.seconds ?: 0L }
+            }
+            .catch { error ->
+                if (error is Exception) handleFirestoreError(error, OperationType.LIST, path)
+                throw error
+            }
+    }
+
+    fun observeAllOrdersForAdmin(): Flow<List<Order>> {
+        val path = "orders"
+        return db.collection(path)
+            .snapshots()
+            .map { snapshot ->
+                snapshot.toObjects(Order::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
+                    .sortedByDescending { it.createdAt?.seconds ?: 0L }
+            }
+            .catch { error ->
+                if (error is Exception) handleFirestoreError(error, OperationType.LIST, path)
+                throw error
+            }
+    }
+
+    /**
+     * Creates a persistent pending order in Firestore before redirecting to WhatsApp.
+     * - Re-reads the authoritative Product document from Firestore to validate availability, stock, and pricePkr.
+     * - Uses a deterministic document ID derived from idempotencyKey so repeated taps do not create duplicate orders.
+     */
+    suspend fun createDirectPurchaseOrder(
+        idempotencyKey: String,
+        productId: String,
+        quantity: Long,
+        customerName: String,
+        customerPhone: String,
+        deliveryType: String,
+        deliveryAddress: String,
+        paymentMethod: String
+    ): Result<Order> {
+        val uid = requireUserId()
+        val safeIdempotency = idempotencyKey.replace(Regex("[^a-zA-Z0-9_\\-]"), "").take(80)
+            .ifBlank { "idem_${uid.take(8)}_${productId.take(12)}" }
+        val orderDocId = "ord_$safeIdempotency".take(120)
+        val orderRef = db.collection("orders").document(orderDocId)
+
+        return try {
+            // Idempotency check: if order already exists for this checkout session key, return it immediately
+            val existingSnap = orderRef.get().await()
+            if (existingSnap.exists()) {
+                val existingOrder = existingSnap.toObject(Order::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
+                if (existingOrder != null) {
+                    return Result.success(existingOrder)
+                }
+            }
+
+            // Fetch authoritative product snapshot from Firestore
+            val productSnap = db.collection("products").document(productId).get().await()
+            if (!productSnap.exists()) {
+                return Result.failure(IllegalStateException("Product no longer exists in the marketplace."))
+            }
+            val authoritativeProduct = productSnap.toObject(Product::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
+                ?: return Result.failure(IllegalStateException("Unable to read product data."))
+
+            if (authoritativeProduct.status != "active" || !authoritativeProduct.isAvailable) {
+                return Result.failure(IllegalStateException("This product is currently marked unavailable by the shopkeeper."))
+            }
+            val validQty = quantity.coerceIn(1L, 1000L)
+            if (authoritativeProduct.stockQuantity < validQty) {
+                return Result.failure(
+                    IllegalStateException("Requested quantity ($validQty) exceeds available stock (${authoritativeProduct.stockQuantity}).")
+                )
+            }
+
+            val unitPrice = authoritativeProduct.pricePkr
+            val subtotal = validQty * unitPrice
+            val shortCode = safeIdempotency.takeLast(6).uppercase()
+            val orderNumber = "MH-$shortCode"
+
+            val safeCustomerName = customerName.trim().ifBlank { "MarketHub Customer" }.take(100)
+            val safeCustomerPhone = customerPhone.trim().ifBlank { "+923000000000" }.take(30)
+            val safeDeliveryType = if (deliveryType == "pickup") "pickup" else "delivery"
+            val safeAddress = deliveryAddress.trim().ifBlank {
+                if (safeDeliveryType == "pickup") "${authoritativeProduct.shopName}, ${authoritativeProduct.marketName}"
+                else "Address to be confirmed on WhatsApp"
+            }.take(350)
+
+            val payload = mapOf(
+                "orderNumber" to orderNumber,
+                "idempotencyKey" to safeIdempotency,
+                "customerId" to uid,
+                "customerName" to safeCustomerName,
+                "customerPhone" to safeCustomerPhone,
+                "deliveryType" to safeDeliveryType,
+                "deliveryAddress" to safeAddress,
+                "productId" to authoritativeProduct.id,
+                "productName" to authoritativeProduct.name.take(120),
+                "shopId" to authoritativeProduct.shopId,
+                "shopName" to authoritativeProduct.shopName.take(100),
+                "shopOwnerId" to authoritativeProduct.ownerId,
+                "shopWhatsappNumber" to authoritativeProduct.whatsappNumber.take(30),
+                "quantity" to validQty,
+                "unitPricePkr" to unitPrice,
+                "subtotalPkr" to subtotal,
+                "paymentMethod" to paymentMethod,
+                "paymentStatus" to "Awaiting Payment",
+                "orderStatus" to "pending",
+                "transactionReference" to "",
+                "proofScreenshotUri" to "",
+                "verifierNotes" to "",
+                "verifiedByUid" to "",
+                "createdAt" to FieldValue.serverTimestamp(),
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+
+            orderRef.set(payload).await()
+            val savedSnap = orderRef.get().await()
+            val savedOrder = savedSnap.toObject(Order::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
+                ?: Order(
+                    id = orderDocId,
+                    orderNumber = orderNumber,
+                    idempotencyKey = safeIdempotency,
+                    customerId = uid,
+                    customerName = safeCustomerName,
+                    customerPhone = safeCustomerPhone,
+                    deliveryType = safeDeliveryType,
+                    deliveryAddress = safeAddress,
+                    productId = authoritativeProduct.id,
+                    productName = authoritativeProduct.name,
+                    shopId = authoritativeProduct.shopId,
+                    shopName = authoritativeProduct.shopName,
+                    shopOwnerId = authoritativeProduct.ownerId,
+                    shopWhatsappNumber = authoritativeProduct.whatsappNumber,
+                    quantity = validQty,
+                    unitPricePkr = unitPrice,
+                    subtotalPkr = subtotal,
+                    paymentMethod = paymentMethod,
+                    paymentStatus = "Awaiting Payment",
+                    orderStatus = "pending"
+                )
+            Result.success(savedOrder)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.CREATE, orderRef.path)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Allows the customer to submit a transaction reference and optional payment screenshot URI.
+     * Sets paymentStatus to "Proof Submitted" (never "Payment Verified").
+     */
+    suspend fun submitOrderPaymentProof(
+        orderId: String,
+        transactionReference: String,
+        proofScreenshotUri: String
+    ): Result<Unit> {
+        requireUserId()
+        val docRef = db.collection("orders").document(orderId)
+        val trimmedRef = transactionReference.trim().take(150)
+        if (trimmedRef.length < 2) {
+            return Result.failure(IllegalArgumentException("Please enter a valid transaction reference or TID."))
+        }
+        return try {
+            docRef.update(
+                mapOf(
+                    "transactionReference" to trimmedRef,
+                    "proofScreenshotUri" to proofScreenshotUri.trim().take(500000),
+                    "paymentStatus" to "Proof Submitted",
+                    "updatedAt" to FieldValue.serverTimestamp()
+                )
+            ).await()
+            Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.UPDATE, docRef.path)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Allows an authorized Administrator (or authorized Shopkeeper) to update payment verification
+     * status ("Under Review", "Payment Verified", "Payment Rejected") and order fulfilment status.
+     */
+    suspend fun updateOrderAndPaymentStatusByVerifier(
+        orderId: String,
+        paymentStatus: String,
+        orderStatus: String,
+        verifierNotes: String
+    ): Result<Unit> {
+        val uid = requireUserId()
+        val docRef = db.collection("orders").document(orderId)
+        val verifiedBy = if (paymentStatus == "Payment Verified") uid else ""
+        return try {
+            docRef.update(
+                mapOf(
+                    "paymentStatus" to paymentStatus,
+                    "orderStatus" to orderStatus,
+                    "verifierNotes" to verifierNotes.trim().take(500),
+                    "verifiedByUid" to verifiedBy,
                     "updatedAt" to FieldValue.serverTimestamp()
                 )
             ).await()

@@ -58,14 +58,18 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.example.data.model.Category
 import com.example.data.model.Inquiry
 import com.example.data.model.Market
 import com.example.data.model.Offer
+import com.example.data.model.Order
+import com.example.data.model.PaymentSettings
 import com.example.data.model.Product
 import com.example.data.model.Shop
 import com.example.data.model.formatPkr
 import com.example.ui.components.AvailabilityBadge
+import com.example.ui.components.PaymentStatusBadge
 import com.example.ui.components.VerifiedShopBadge
 import com.example.ui.components.formatTimestampShort
 import com.example.ui.theme.DangerRed
@@ -76,6 +80,8 @@ fun ShopkeeperDashboardScreen(
     myProducts: List<Product>,
     myOffers: List<Offer>,
     shopkeeperInquiries: List<Inquiry>,
+    shopkeeperOrders: List<Order> = emptyList(),
+    paymentSettings: PaymentSettings = PaymentSettings(),
     categories: List<Category>,
     markets: List<Market>,
     isBusy: Boolean,
@@ -136,7 +142,8 @@ fun ShopkeeperDashboardScreen(
         originalPricePkr: Long
     ) -> Unit,
     onDeleteOffer: (String) -> Unit,
-    onReplyToInquiry: (inquiryId: String, replyText: String, closeInquiry: Boolean) -> Unit
+    onReplyToInquiry: (inquiryId: String, replyText: String, closeInquiry: Boolean) -> Unit,
+    onUpdateOrderStatus: (orderId: String, paymentStatus: String, orderStatus: String, verifierNotes: String) -> Unit = { _, _, _, _ -> }
 ) {
     var selectedShopIndex by remember { mutableIntStateOf(0) }
     var activeTab by remember { mutableIntStateOf(0) }
@@ -197,6 +204,10 @@ fun ShopkeeperDashboardScreen(
     val shopInquiries = remember(shopkeeperInquiries, activeShop) {
         if (activeShop == null) emptyList()
         else shopkeeperInquiries.filter { it.shopId == activeShop.id }
+    }
+    val shopOrders = remember(shopkeeperOrders, activeShop) {
+        if (activeShop == null) emptyList()
+        else shopkeeperOrders.filter { it.shopId == activeShop.id }
     }
     val totalProductViews = remember(shopProducts) {
         shopProducts.sumOf { it.viewsCount }
@@ -358,6 +369,7 @@ fun ShopkeeperDashboardScreen(
             item {
                 val tabs = listOf(
                     "Products (${shopProducts.size})",
+                    "Orders (${shopOrders.size})",
                     "Offers (${shopOffers.size})",
                     "Inquiries (${shopInquiries.size})",
                     "Shop Profile"
@@ -507,6 +519,202 @@ fun ShopkeeperDashboardScreen(
                 }
 
                 1 -> {
+                    // ORDERS TAB
+                    item {
+                        Text(
+                            text = "WhatsApp Direct Purchase Orders (${shopOrders.size})",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = if (paymentSettings.allowShopkeeperPaymentVerification) {
+                                "Manage incoming customer orders and verify submitted payment proofs."
+                            } else {
+                                "Manage incoming customer orders. Manual payment proof verification is handled by MarketHub Administrators."
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    if (shopOrders.isEmpty()) {
+                        item {
+                            Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
+                                Text(
+                                    text = "No direct purchase orders received for ${activeShop.name} yet.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.padding(20.dp)
+                                )
+                            }
+                        }
+                    } else {
+                        items(shopOrders, key = { it.id }) { order ->
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(14.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = "${order.orderNumber} • ${order.productName}",
+                                                style = MaterialTheme.typography.titleSmall,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Text(
+                                                text = "Qty: ${order.quantity} × ${formatPkr(order.unitPricePkr)} = ${formatPkr(order.subtotalPkr)}",
+                                                style = MaterialTheme.typography.labelLarge,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                        PaymentStatusBadge(paymentStatus = order.paymentStatus)
+                                    }
+
+                                    Text(
+                                        text = "Customer: ${order.customerName.ifBlank { "Customer" }} | Phone: ${order.customerPhone.ifBlank { "N/A" }}",
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                    Text(
+                                        text = "Delivery: ${order.deliveryType.uppercase()} — ${order.deliveryAddress.ifBlank { "Local Shop Pickup" }}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        text = "Payment Method: ${com.example.data.model.PaymentMethodOption.fromKey(order.paymentMethod).displayLabel} • Order Status: ${order.orderStatus.uppercase()}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold
+                                    )
+
+                                    if (order.transactionReference.isNotBlank() || order.proofScreenshotUri.isNotBlank()) {
+                                        Surface(
+                                            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f),
+                                            shape = RoundedCornerShape(10.dp),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Column(modifier = Modifier.padding(10.dp)) {
+                                                Text(
+                                                    text = "Submitted Payment Proof",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                                if (order.transactionReference.isNotBlank()) {
+                                                    Text(
+                                                        text = "TID / Reference: ${order.transactionReference}",
+                                                        style = MaterialTheme.typography.bodySmall
+                                                    )
+                                                }
+                                                if (order.proofScreenshotUri.isNotBlank()) {
+                                                    Spacer(modifier = Modifier.height(6.dp))
+                                                    AsyncImage(
+                                                        model = order.proofScreenshotUri,
+                                                        contentDescription = "Payment Proof Screenshot",
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .height(140.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    HorizontalDivider()
+
+                                    Text(
+                                        text = "Update Order Fulfillment Status:",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        OutlinedButton(
+                                            onClick = {
+                                                onUpdateOrderStatus(order.id, order.paymentStatus, "confirmed", order.verifierNotes)
+                                            },
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Text("Confirm Order", style = MaterialTheme.typography.labelSmall)
+                                        }
+                                        OutlinedButton(
+                                            onClick = {
+                                                onUpdateOrderStatus(order.id, order.paymentStatus, "completed", order.verifierNotes)
+                                            },
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Text("Complete", style = MaterialTheme.typography.labelSmall)
+                                        }
+                                        OutlinedButton(
+                                            onClick = {
+                                                onUpdateOrderStatus(order.id, order.paymentStatus, "cancelled", order.verifierNotes)
+                                            },
+                                            colors = ButtonDefaults.outlinedButtonColors(contentColor = DangerRed),
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Text("Cancel", style = MaterialTheme.typography.labelSmall)
+                                        }
+                                    }
+
+                                    if (paymentSettings.allowShopkeeperPaymentVerification &&
+                                        order.paymentMethod != com.example.data.model.PaymentMethodOption.CASH_ON_DELIVERY.key
+                                    ) {
+                                        Text(
+                                            text = "Authorized Shopkeeper Payment Verification:",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Button(
+                                                onClick = {
+                                                    onUpdateOrderStatus(
+                                                        order.id,
+                                                        "Payment Verified",
+                                                        if (order.orderStatus == "pending") "confirmed" else order.orderStatus,
+                                                        "Payment verified by shopkeeper"
+                                                    )
+                                                },
+                                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D)),
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                Text("Verify Payment", style = MaterialTheme.typography.labelSmall)
+                                            }
+                                            OutlinedButton(
+                                                onClick = {
+                                                    onUpdateOrderStatus(
+                                                        order.id,
+                                                        "Payment Rejected",
+                                                        order.orderStatus,
+                                                        "Payment proof rejected by shopkeeper"
+                                                    )
+                                                },
+                                                colors = ButtonDefaults.outlinedButtonColors(contentColor = DangerRed),
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                Text("Reject Proof", style = MaterialTheme.typography.labelSmall)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                2 -> {
                     // OFFERS TAB
                     item {
                         Row(
@@ -583,7 +791,7 @@ fun ShopkeeperDashboardScreen(
                     }
                 }
 
-                2 -> {
+                3 -> {
                     // INQUIRIES TAB
                     item {
                         Text(
@@ -671,7 +879,7 @@ fun ShopkeeperDashboardScreen(
                     }
                 }
 
-                3 -> {
+                4 -> {
                     // SHOP PROFILE EDIT TAB
                     item {
                         ShopRegistrationOrEditForm(

@@ -135,6 +135,67 @@ class MarketHubRepositoryRuleTest : FirestoreEmulatorTestBase() {
         assertEquals(FirebaseFirestoreException.Code.PERMISSION_DENIED, firestoreEx?.code)
     }
 
+    @Test
+    fun nonAdminUser_cannotSavePaymentSettings_failsWithPermissionDenied_andWhatsAppOrderMessageFormatsCorrectly() = runBlocking {
+        signInTestUser("regular_customer@markethub.pk")
+        val repository = MarketHubRepository(firestore)
+
+        val saveResult = withTimeout(TIMEOUT_MS) {
+            repository.savePaymentSettingsAsAdmin(
+                bankTransferEnabled = true,
+                bankName = "Meezan Bank",
+                bankAccountTitle = "MarketHub Merchant",
+                bankAccountNumberOrIban = "PK00MEZN00010203040506",
+                bankInstructions = "Include Order Ref",
+                easypaisaEnabled = true,
+                easypaisaAccountHolderName = "MarketHub",
+                easypaisaMobileNumber = "03001234567",
+                easypaisaInstructions = "",
+                binancePayEnabled = false,
+                binanceMerchantName = "",
+                binancePayIdOrInstructions = "",
+                codEnabledByDefault = true,
+                allowShopkeeperPaymentVerification = false
+            )
+        }
+        assertTrue(saveResult.isFailure)
+        val firestoreEx = saveResult.exceptionOrNull()?.unwrapFirestoreException()
+        assertNotNull(firestoreEx)
+        assertEquals(FirebaseFirestoreException.Code.PERMISSION_DENIED, firestoreEx?.code)
+
+        val sampleOrder = com.example.data.model.Order(
+            id = "ord_test_1",
+            orderNumber = "MH-908172",
+            productId = "prod_101",
+            productName = "Samsung Galaxy A55 5G",
+            shopId = "shop_1",
+            shopName = "Tariq Mobile Zone",
+            shopWhatsappNumber = "923214455667",
+            quantity = 2L,
+            unitPricePkr = 135000L,
+            subtotalPkr = 270000L,
+            customerName = "Ali Raza",
+            customerPhone = "03001122334",
+            deliveryType = "delivery",
+            deliveryAddress = "House 12, Model Town, Lahore",
+            paymentMethod = "BANK_TRANSFER"
+        )
+        val waMessage = com.example.data.model.buildWhatsAppDirectPurchaseOrderMessage(sampleOrder)
+        assertTrue(waMessage.contains("Hello! I want to purchase this product from MarketHub."))
+        assertTrue(waMessage.contains("- Product Name: Samsung Galaxy A55 5G"))
+        assertTrue(waMessage.contains("- Product ID: prod_101"))
+        assertTrue(waMessage.contains("- Shop Name: Tariq Mobile Zone"))
+        assertTrue(waMessage.contains("- Quantity: 2"))
+        assertTrue(waMessage.contains("- Unit Price: Rs. 135,000"))
+        assertTrue(waMessage.contains("- Subtotal: Rs. 270,000"))
+        assertTrue(waMessage.contains("- Product Link: https://markethub.pk/shops/shop_1/products/prod_101"))
+        assertTrue(waMessage.contains("- Customer Name: Ali Raza"))
+        assertTrue(waMessage.contains("- Contact Number: 03001122334"))
+        assertTrue(waMessage.contains("- Delivery Address: House 12, Model Town, Lahore"))
+        assertTrue(waMessage.contains("Selected Payment Method: Bank Transfer"))
+        assertTrue(waMessage.contains("Please confirm product availability, delivery charges and the final payable amount."))
+    }
+
     private companion object {
         const val TIMEOUT_MS = 5000L
         const val FLOW_TIMEOUT_MS = 3000L

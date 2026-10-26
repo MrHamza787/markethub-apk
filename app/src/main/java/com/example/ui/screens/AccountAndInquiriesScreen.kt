@@ -38,8 +38,11 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.data.model.Inquiry
+import com.example.data.model.Order
+import com.example.data.model.PaymentSettings
 import com.example.data.model.UserProfile
 import com.example.data.model.formatPkr
+import com.example.ui.components.CustomerOrderCard
 import com.example.ui.components.formatTimestampShort
 import com.example.ui.theme.DangerRed
 
@@ -50,7 +53,11 @@ fun AccountAndInquiriesScreen(
     fallbackEmail: String,
     isAdmin: Boolean,
     customerInquiries: List<Inquiry>,
+    customerOrders: List<Order> = emptyList(),
+    paymentSettings: PaymentSettings = PaymentSettings(),
     onUpdateProfile: (displayName: String, phone: String, role: String) -> Unit,
+    onOpenOrderWhatsApp: (Order) -> Unit = {},
+    onSubmitOrderProof: (orderId: String, tid: String, screenshotUri: String) -> Unit = { _, _, _ -> },
     onSignOut: () -> Unit
 ) {
     var displayName by remember(userProfile?.displayName) {
@@ -180,6 +187,44 @@ fun AccountAndInquiriesScreen(
                         }
                     }
                 }
+            }
+        }
+
+        // My WhatsApp Purchase Orders Section
+        item {
+            Text(
+                text = "My WhatsApp Purchase Orders (${customerOrders.size})",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = "View your order status, submit Bank Transfer / Easypaisa / Binance Pay proof, or reopen WhatsApp chat with the shopkeeper",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        if (customerOrders.isEmpty()) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Text(
+                        text = "No purchase orders placed yet. Tap 'Buy Now on WhatsApp' on any available product to place a direct order.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(20.dp)
+                    )
+                }
+            }
+        } else {
+            items(customerOrders, key = { it.id }) { order ->
+                CustomerOrderCard(
+                    order = order,
+                    paymentSettings = paymentSettings,
+                    onOpenWhatsApp = onOpenOrderWhatsApp,
+                    onSubmitPaymentProof = onSubmitOrderProof
+                )
             }
         }
 

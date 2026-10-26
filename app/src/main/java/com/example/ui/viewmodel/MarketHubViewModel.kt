@@ -8,6 +8,8 @@ import com.example.data.model.Inquiry
 import com.example.data.model.Market
 import com.example.data.model.MarketHubDefaults
 import com.example.data.model.Offer
+import com.example.data.model.Order
+import com.example.data.model.PaymentSettings
 import com.example.data.model.PriceComparisonGroup
 import com.example.data.model.Product
 import com.example.data.model.Report
@@ -175,6 +177,18 @@ class MarketHubViewModel(
         .catch { emit(emptyList()) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), emptyList())
 
+    val paymentSettings: StateFlow<PaymentSettings> = repository.observePaymentSettings()
+        .catch { emit(PaymentSettings()) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), PaymentSettings())
+
+    val customerOrders: StateFlow<List<Order>> = repository.observeCustomerOrders(currentUserId)
+        .catch { emit(emptyList()) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), emptyList())
+
+    val shopkeeperOrders: StateFlow<List<Order>> = repository.observeShopkeeperOrders(currentUserId)
+        .catch { emit(emptyList()) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), emptyList())
+
     // Admin streams - strictly gated by _isAdmin
     val allShopsAdmin: StateFlow<List<Shop>> = _isAdmin
         .flatMapLatest { admin ->
@@ -197,6 +211,13 @@ class MarketHubViewModel(
             if (admin) repository.observeAllReportsForAdmin() else flowOf(emptyList())
         }
         .map { list -> list.sortedByDescending { it.createdAt ?: Timestamp(0, 0) } }
+        .catch { emit(emptyList()) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), emptyList())
+
+    val allOrdersAdmin: StateFlow<List<Order>> = _isAdmin
+        .flatMapLatest { admin ->
+            if (admin) repository.observeAllOrdersForAdmin() else flowOf(emptyList())
+        }
         .catch { emit(emptyList()) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), emptyList())
 
@@ -748,6 +769,130 @@ class MarketHubViewModel(
                 showBanner("Report marked as $status.")
             }.onFailure {
                 showBanner(it.localizedMessage ?: "Failed to resolve report.", isError = true)
+            }
+        }
+    }
+
+    // --- WHATSAPP DIRECT PURCHASE CHECKOUT & PAYMENT VERIFICATION ---
+
+    fun placeDirectPurchaseOrder(
+        idempotencyKey: String,
+        productId: String,
+        quantity: Long,
+        customerName: String,
+        customerPhone: String,
+        deliveryType: String,
+        deliveryAddress: String,
+        paymentMethod: String,
+        onOrderCreated: (Order) -> Unit
+    ) {
+        viewModelScope.launch {
+            _isBusy.value = true
+            val res = repository.createDirectPurchaseOrder(
+                idempotencyKey = idempotencyKey,
+                productId = productId,
+                quantity = quantity,
+                customerName = customerName,
+                customerPhone = customerPhone,
+                deliveryType = deliveryType,
+                deliveryAddress = deliveryAddress,
+                paymentMethod = paymentMethod
+            )
+            _isBusy.value = false
+            res.onSuccess { order ->
+                showBanner("Order ${order.orderNumber} recorded! Opening WhatsApp chat with ${order.shopName}...")
+                onOrderCreated(order)
+            }.onFailure { err ->
+                showBanner(err.localizedMessage ?: "Failed to create order.", isError = true)
+            }
+        }
+    }
+
+    fun submitOrderPaymentProof(
+        orderId: String,
+        transactionReference: String,
+        proofScreenshotUri: String,
+        onSuccess: () -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            _isBusy.value = true
+            val res = repository.submitOrderPaymentProof(
+                orderId = orderId,
+                transactionReference = transactionReference,
+                proofScreenshotUri = proofScreenshotUri
+            )
+            _isBusy.value = false
+            res.onSuccess {
+                showBanner("Payment proof submitted! Status: Proof Submitted (awaiting verifier review).")
+                onSuccess()
+            }.onFailure { err ->
+                showBanner(err.localizedMessage ?: "Failed to submit payment proof.", isError = true)
+            }
+        }
+    }
+
+    fun savePaymentSettingsAsAdmin(
+        bankTransferEnabled: Boolean,
+        bankName: String,
+        bankAccountTitle: String,
+        bankAccountNumberOrIban: String,
+        bankInstructions: String,
+        easypaisaEnabled: Boolean,
+        easypaisaAccountHolderName: String,
+        easypaisaMobileNumber: String,
+        easypaisaInstructions: String,
+        binancePayEnabled: Boolean,
+        binanceMerchantName: String,
+        binancePayIdOrInstructions: String,
+        codEnabledByDefault: Boolean,
+        allowShopkeeperPaymentVerification: Boolean
+    ) {
+        viewModelScope.launch {
+            _isBusy.value = true
+            val res = repository.savePaymentSettingsAsAdmin(
+                bankTransferEnabled = bankTransferEnabled,
+                bankName = bankName,
+                bankAccountTitle = bankAccountTitle,
+                bankAccountNumberOrIban = bankAccountNumberOrIban,
+                bankInstructions = bankInstructions,
+                easypaisaEnabled = easypaisaEnabled,
+                easypaisaAccountHolderName = easypaisaAccountHolderName,
+                easypaisaMobileNumber = easypaisaMobileNumber,
+                easypaisaInstructions = easypaisaInstructions,
+                binancePayEnabled = binancePayEnabled,
+                binanceMerchantName = binanceMerchantName,
+                binancePayIdOrInstructions = binancePayIdOrInstructions,
+                codEnabledByDefault = codEnabledByDefault,
+                allowShopkeeperPaymentVerification = allowShopkeeperPaymentVerification
+            )
+            _isBusy.value = false
+            res.onSuccess {
+                showBanner("Verified payment settings saved.")
+            }.onFailure { err ->
+                showBanner(err.localizedMessage ?: "Failed to save payment settings.", isError = true)
+            }
+        }
+    }
+
+    fun verifyOrUpdateOrderStatus(
+        orderId: String,
+        paymentStatus: String,
+        orderStatus: String,
+        verifierNotes: String
+    ) {
+        viewModelScope.launch {
+            _isBusy.value = true
+            val res = repository.updateOrderAndPaymentStatusByVerifier(
+                orderId = orderId,
+                paymentStatus = paymentStatus,
+                orderStatus = orderStatus,
+                verifierNotes = verifierNotes
+            )
+            _isBusy.value = false
+            res.onSuccess {
+                showBanner("Order updated: Payment=$paymentStatus, Order=$orderStatus")
+            }.onFailure { err ->
+                showBanner(err.localizedMessage ?: "Failed to update order status.", isError = true)
             }
         }
     }

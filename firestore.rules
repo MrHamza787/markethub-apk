@@ -232,6 +232,100 @@ service cloud.firestore {
              isValidTimestamp(data.updatedAt);
     }
 
+    function isValidPaymentSettings(data) {
+      return data.keys().hasAll([
+               'bankTransferEnabled', 'bankName', 'bankAccountTitle', 'bankAccountNumberOrIban', 'bankInstructions',
+               'easypaisaEnabled', 'easypaisaAccountHolderName', 'easypaisaMobileNumber', 'easypaisaInstructions',
+               'binancePayEnabled', 'binanceMerchantName', 'binancePayIdOrInstructions',
+               'codEnabledByDefault', 'allowShopkeeperPaymentVerification', 'updatedByUid', 'updatedAt'
+             ]) &&
+             data.keys().hasOnly([
+               'bankTransferEnabled', 'bankName', 'bankAccountTitle', 'bankAccountNumberOrIban', 'bankInstructions',
+               'easypaisaEnabled', 'easypaisaAccountHolderName', 'easypaisaMobileNumber', 'easypaisaInstructions',
+               'binancePayEnabled', 'binanceMerchantName', 'binancePayIdOrInstructions',
+               'codEnabledByDefault', 'allowShopkeeperPaymentVerification', 'updatedByUid', 'updatedAt'
+             ]) &&
+             data.bankTransferEnabled is bool &&
+             data.bankName is string && data.bankName.size() <= 120 &&
+             data.bankAccountTitle is string && data.bankAccountTitle.size() <= 120 &&
+             data.bankAccountNumberOrIban is string && data.bankAccountNumberOrIban.size() <= 80 &&
+             data.bankInstructions is string && data.bankInstructions.size() <= 600 &&
+             data.easypaisaEnabled is bool &&
+             data.easypaisaAccountHolderName is string && data.easypaisaAccountHolderName.size() <= 120 &&
+             data.easypaisaMobileNumber is string && data.easypaisaMobileNumber.size() <= 40 &&
+             data.easypaisaInstructions is string && data.easypaisaInstructions.size() <= 600 &&
+             data.binancePayEnabled is bool &&
+             data.binanceMerchantName is string && data.binanceMerchantName.size() <= 120 &&
+             data.binancePayIdOrInstructions is string && data.binancePayIdOrInstructions.size() <= 600 &&
+             data.codEnabledByDefault is bool &&
+             data.allowShopkeeperPaymentVerification is bool &&
+             isValidId(data.updatedByUid) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidOrder(data) {
+      return data.keys().hasAll([
+               'orderNumber', 'idempotencyKey', 'customerId', 'customerName', 'customerPhone',
+               'deliveryType', 'deliveryAddress', 'productId', 'productName', 'shopId', 'shopName',
+               'shopOwnerId', 'shopWhatsappNumber', 'quantity', 'unitPricePkr', 'subtotalPkr',
+               'paymentMethod', 'paymentStatus', 'orderStatus', 'transactionReference',
+               'proofScreenshotUri', 'verifierNotes', 'verifiedByUid', 'createdAt', 'updatedAt'
+             ]) &&
+             data.keys().hasOnly([
+               'orderNumber', 'idempotencyKey', 'customerId', 'customerName', 'customerPhone',
+               'deliveryType', 'deliveryAddress', 'productId', 'productName', 'shopId', 'shopName',
+               'shopOwnerId', 'shopWhatsappNumber', 'quantity', 'unitPricePkr', 'subtotalPkr',
+               'paymentMethod', 'paymentStatus', 'orderStatus', 'transactionReference',
+               'proofScreenshotUri', 'verifierNotes', 'verifiedByUid', 'createdAt', 'updatedAt'
+             ]) &&
+             data.orderNumber is string && data.orderNumber.size() >= 4 && data.orderNumber.size() <= 60 &&
+             data.idempotencyKey is string && data.idempotencyKey.size() >= 4 && data.idempotencyKey.size() <= 128 &&
+             isValidId(data.customerId) &&
+             data.customerName is string && data.customerName.size() >= 1 && data.customerName.size() <= 100 &&
+             data.customerPhone is string && data.customerPhone.size() >= 5 && data.customerPhone.size() <= 30 &&
+             data.deliveryType is string && (data.deliveryType == 'delivery' || data.deliveryType == 'pickup') &&
+             data.deliveryAddress is string && data.deliveryAddress.size() >= 2 && data.deliveryAddress.size() <= 350 &&
+             isValidId(data.productId) &&
+             data.productName is string && data.productName.size() >= 2 && data.productName.size() <= 120 &&
+             isValidId(data.shopId) &&
+             data.shopName is string && data.shopName.size() >= 2 && data.shopName.size() <= 100 &&
+             isValidId(data.shopOwnerId) &&
+             data.shopWhatsappNumber is string && data.shopWhatsappNumber.size() >= 5 && data.shopWhatsappNumber.size() <= 30 &&
+             data.quantity is int && data.quantity >= 1 && data.quantity <= 1000 &&
+             data.unitPricePkr is int && data.unitPricePkr > 0 && data.unitPricePkr <= 100000000 &&
+             data.subtotalPkr is int && data.subtotalPkr == data.quantity * data.unitPricePkr &&
+             data.paymentMethod is string && (
+               data.paymentMethod == 'BANK_TRANSFER' ||
+               data.paymentMethod == 'EASYPAISA' ||
+               data.paymentMethod == 'BINANCE_PAY' ||
+               data.paymentMethod == 'CASH_ON_DELIVERY'
+             ) &&
+             data.paymentStatus is string && (
+               data.paymentStatus == 'Awaiting Payment' ||
+               data.paymentStatus == 'Proof Submitted' ||
+               data.paymentStatus == 'Under Review' ||
+               data.paymentStatus == 'Payment Verified' ||
+               data.paymentStatus == 'Payment Rejected'
+             ) &&
+             data.orderStatus is string && (
+               data.orderStatus == 'pending' ||
+               data.orderStatus == 'confirmed' ||
+               data.orderStatus == 'completed' ||
+               data.orderStatus == 'cancelled'
+             ) &&
+             data.transactionReference is string && data.transactionReference.size() <= 150 &&
+             data.proofScreenshotUri is string && data.proofScreenshotUri.size() <= 500000 &&
+             data.verifierNotes is string && data.verifierNotes.size() <= 500 &&
+             data.verifiedByUid is string && data.verifiedByUid.size() <= 128 &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function canShopkeeperVerifyPayment() {
+      return exists(/databases/$(database)/documents/payment_settings/global) &&
+             get(/databases/$(database)/documents/payment_settings/global).data.allowShopkeeperPaymentVerification == true;
+    }
+
     // 1. /admins/{adminId}
     match /admins/{adminId} {
       allow get: if isSignedIn() && isValidId(adminId) && (request.auth.uid == adminId || isAdmin());
@@ -548,6 +642,93 @@ service cloud.firestore {
                        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'adminNotes', 'updatedAt']);
 
       allow delete: if isSignedIn() && isValidId(reportId) && isAdmin();
+    }
+
+    // 10. /payment_settings/{settingId} - Admin-Configured Verified Payment Settings
+    match /payment_settings/{settingId} {
+      allow get, list: if isSignedIn() && isValidId(settingId);
+      allow create, update: if isSignedIn() &&
+                               isValidId(settingId) &&
+                               isValidPaymentSettings(incoming()) &&
+                               incoming().updatedByUid == request.auth.uid &&
+                               isAdmin();
+      allow delete: if isSignedIn() && isValidId(settingId) && isAdmin();
+    }
+
+    // 11. /orders/{orderId} - Backend-Validated WhatsApp Direct Purchase Orders
+    match /orders/{orderId} {
+      allow get: if isSignedIn() && isValidId(orderId) && (
+        existing().customerId == request.auth.uid ||
+        existing().shopOwnerId == request.auth.uid ||
+        isAdmin()
+      );
+      allow list: if isSignedIn() && (
+        existing().customerId == request.auth.uid ||
+        existing().shopOwnerId == request.auth.uid ||
+        isAdmin()
+      );
+
+      // Trusted backend validation on order creation:
+      // Verifies product exists, is active, isAvailable == true, has sufficient stockQuantity,
+      // and enforces that unitPricePkr and subtotalPkr match the authoritative product price in Firestore.
+      allow create: if isSignedIn() &&
+                       isValidId(orderId) &&
+                       isValidOrder(incoming()) &&
+                       incoming().customerId == request.auth.uid &&
+                       incoming().paymentStatus == 'Awaiting Payment' &&
+                       incoming().orderStatus == 'pending' &&
+                       incoming().transactionReference == '' &&
+                       incoming().proofScreenshotUri == '' &&
+                       incoming().verifierNotes == '' &&
+                       incoming().verifiedByUid == '' &&
+                       exists(/databases/$(database)/documents/products/$(incoming().productId)) &&
+                       get(/databases/$(database)/documents/products/$(incoming().productId)).data.status == 'active' &&
+                       get(/databases/$(database)/documents/products/$(incoming().productId)).data.isAvailable == true &&
+                       get(/databases/$(database)/documents/products/$(incoming().productId)).data.stockQuantity >= incoming().quantity &&
+                       incoming().unitPricePkr == get(/databases/$(database)/documents/products/$(incoming().productId)).data.pricePkr &&
+                       incoming().subtotalPkr == incoming().quantity * get(/databases/$(database)/documents/products/$(incoming().productId)).data.pricePkr &&
+                       incoming().shopId == get(/databases/$(database)/documents/products/$(incoming().productId)).data.shopId &&
+                       incoming().shopOwnerId == get(/databases/$(database)/documents/products/$(incoming().productId)).data.ownerId;
+
+      allow update: if isSignedIn() &&
+                       isValidId(orderId) &&
+                       isValidOrder(incoming()) &&
+                       incoming().orderNumber == existing().orderNumber &&
+                       incoming().idempotencyKey == existing().idempotencyKey &&
+                       incoming().customerId == existing().customerId &&
+                       incoming().productId == existing().productId &&
+                       incoming().shopId == existing().shopId &&
+                       incoming().shopOwnerId == existing().shopOwnerId &&
+                       incoming().quantity == existing().quantity &&
+                       incoming().unitPricePkr == existing().unitPricePkr &&
+                       incoming().subtotalPkr == existing().subtotalPkr &&
+                       incoming().paymentMethod == existing().paymentMethod &&
+                       incoming().createdAt == existing().createdAt && (
+                         // Action 1: Customer submits manual payment proof (never allowed to mark Payment Verified)
+                         (existing().customerId == request.auth.uid &&
+                          (existing().paymentStatus == 'Awaiting Payment' || existing().paymentStatus == 'Payment Rejected' || existing().paymentStatus == 'Proof Submitted') &&
+                          incoming().paymentStatus == 'Proof Submitted' &&
+                          incoming().transactionReference.size() >= 2 &&
+                          incoming().orderStatus == existing().orderStatus &&
+                          incoming().verifierNotes == existing().verifierNotes &&
+                          incoming().verifiedByUid == existing().verifiedByUid &&
+                          incoming().diff(existing()).affectedKeys().hasOnly([
+                            'transactionReference', 'proofScreenshotUri', 'paymentStatus', 'updatedAt'
+                          ])) ||
+                         // Action 2: Shopkeeper updates order fulfilment status (and payment status ONLY if authorized by admin in payment_settings)
+                         (existing().shopOwnerId == request.auth.uid &&
+                          (incoming().paymentStatus == existing().paymentStatus || canShopkeeperVerifyPayment()) &&
+                          incoming().diff(existing()).affectedKeys().hasOnly([
+                            'orderStatus', 'paymentStatus', 'verifierNotes', 'verifiedByUid', 'updatedAt'
+                          ])) ||
+                         // Action 3: Administrator verifies/rejects payment or updates order status
+                         (isAdmin() &&
+                          incoming().diff(existing()).affectedKeys().hasOnly([
+                            'orderStatus', 'paymentStatus', 'verifierNotes', 'verifiedByUid', 'updatedAt'
+                          ]))
+                       );
+
+      allow delete: if isSignedIn() && isValidId(orderId) && isAdmin();
     }
   }
 }

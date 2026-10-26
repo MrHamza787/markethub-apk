@@ -107,7 +107,8 @@ fun CustomerHomeAndExploreScreen(
     onWhatsAppShop: (Shop) -> Unit,
     onWhatsAppOffer: (Offer) -> Unit,
     onNavigateToCompareTab: () -> Unit,
-    onNavigateToShopkeeperTab: () -> Unit
+    onNavigateToShopkeeperTab: () -> Unit,
+    onBuyNowProduct: (Product) -> Unit = {}
 ) {
     var showFilterModal by remember { mutableStateOf(false) }
     val approvedShops = (approvedShopsState as? UiState.Success)?.data ?: emptyList()
@@ -493,6 +494,7 @@ fun CustomerHomeAndExploreScreen(
                                 onShopClick = onOpenShopDetail,
                                 onCompareClick = onCompareProduct,
                                 onWhatsAppClick = onWhatsAppProduct,
+                                onBuyNowClick = onBuyNowProduct,
                                 modifier = Modifier.width(265.dp)
                             )
                         }
@@ -556,7 +558,8 @@ fun CustomerHomeAndExploreScreen(
                                 onProductClick = onOpenProductDetail,
                                 onShopClick = onOpenShopDetail,
                                 onCompareClick = onCompareProduct,
-                                onWhatsAppClick = onWhatsAppProduct
+                                onWhatsAppClick = onWhatsAppProduct,
+                                onBuyNowClick = onBuyNowProduct
                             )
                         }
                     }

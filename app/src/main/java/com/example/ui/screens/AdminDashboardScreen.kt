@@ -35,6 +35,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -50,13 +51,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.example.data.model.Category
 import com.example.data.model.Market
 import com.example.data.model.Offer
+import com.example.data.model.Order
+import com.example.data.model.PaymentSettings
 import com.example.data.model.Product
 import com.example.data.model.Report
 import com.example.data.model.Shop
 import com.example.data.model.formatPkr
+import com.example.ui.components.PaymentStatusBadge
 import com.example.ui.components.VerifiedShopBadge
 import com.example.ui.theme.DangerRed
 
@@ -67,6 +72,8 @@ fun AdminDashboardScreen(
     allProducts: List<Product>,
     allOffers: List<Offer>,
     allReports: List<Report>,
+    allOrders: List<Order> = emptyList(),
+    paymentSettings: PaymentSettings = PaymentSettings(),
     categories: List<Category>,
     markets: List<Market>,
     onModerateShop: (shopId: String, status: String, isVerified: Boolean, isFeatured: Boolean) -> Unit,
@@ -75,7 +82,24 @@ fun AdminDashboardScreen(
     onSaveCategory: (categoryId: String?, name: String, iconName: String, description: String, displayOrder: Long) -> Unit,
     onDeleteCategory: (String) -> Unit,
     onSaveMarket: (marketId: String?, name: String, city: String, address: String, description: String) -> Unit,
-    onResolveReport: (reportId: String, status: String, adminNotes: String) -> Unit
+    onResolveReport: (reportId: String, status: String, adminNotes: String) -> Unit,
+    onVerifyOrderPayment: (orderId: String, paymentStatus: String, orderStatus: String, verifierNotes: String) -> Unit = { _, _, _, _ -> },
+    onSavePaymentSettings: (
+        bankTransferEnabled: Boolean,
+        bankName: String,
+        bankAccountTitle: String,
+        bankAccountNumberOrIban: String,
+        bankInstructions: String,
+        easypaisaEnabled: Boolean,
+        easypaisaAccountHolderName: String,
+        easypaisaMobileNumber: String,
+        easypaisaInstructions: String,
+        binancePayEnabled: Boolean,
+        binanceMerchantName: String,
+        binancePayIdOrInstructions: String,
+        codEnabledByDefault: Boolean,
+        allowShopkeeperPaymentVerification: Boolean
+    ) -> Unit = { _, _, _, _, _, _, _, _, _, _, _, _, _, _ -> }
 ) {
     if (!isAdmin) {
         Card(
@@ -119,7 +143,9 @@ fun AdminDashboardScreen(
 
     val pendingShops = remember(allShops) { allShops.filter { it.status == "pending" } }
     val approvedShopsCount = remember(allShops) { allShops.count { it.status == "approved" } }
-    val openReports = remember(allReports) { allReports.filter { it.status == "open" } }
+    val pendingProofOrders = remember(allOrders) {
+        allOrders.filter { it.paymentStatus == "Proof Submitted" || it.paymentStatus == "Under Review" }
+    }
 
     LazyColumn(
         modifier = Modifier
@@ -135,7 +161,7 @@ fun AdminDashboardScreen(
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = "Approve shops, moderate listings, manage categories & resolve reports",
+                text = "Approve shops, verify payment proofs, configure payment accounts & moderate listings",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -160,15 +186,15 @@ fun AdminDashboardScreen(
                     modifier = Modifier.weight(1f)
                 )
                 AdminStatCard(
-                    title = "Products",
-                    value = allProducts.size.toString(),
+                    title = "Orders",
+                    value = allOrders.size.toString(),
                     highlight = false,
                     modifier = Modifier.weight(1f)
                 )
                 AdminStatCard(
-                    title = "Open Reports",
-                    value = openReports.size.toString(),
-                    highlight = openReports.isNotEmpty(),
+                    title = "Proofs Pending",
+                    value = pendingProofOrders.size.toString(),
+                    highlight = pendingProofOrders.isNotEmpty(),
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -177,6 +203,8 @@ fun AdminDashboardScreen(
         item {
             val tabs = listOf(
                 "Shops (${allShops.size})",
+                "Orders & Proofs (${allOrders.size})",
+                "Payment Settings",
                 "Products (${allProducts.size})",
                 "Categories (${categories.size})",
                 "Markets (${markets.size})",
@@ -336,6 +364,172 @@ fun AdminDashboardScreen(
             }
 
             1 -> {
+                // ORDERS & PAYMENT PROOFS VERIFICATION
+                item {
+                    Text(
+                        text = "Orders & Payment Proof Verification (${allOrders.size})",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Independently verify Bank Transfer, Easypaisa, and Binance Pay transaction references before marking any order as Payment Verified.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                if (allOrders.isEmpty()) {
+                    item {
+                        Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
+                            Text(
+                                text = "No customer direct purchase orders recorded yet.",
+                                modifier = Modifier.padding(20.dp)
+                            )
+                        }
+                    }
+                } else {
+                    items(allOrders, key = { it.id }) { order ->
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "${order.orderNumber} • ${order.productName}",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = "Shop: ${order.shopName} • Qty: ${order.quantity} • Total: ${formatPkr(order.subtotalPkr)}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                    PaymentStatusBadge(paymentStatus = order.paymentStatus)
+                                }
+
+                                Text(
+                                    text = "Customer: ${order.customerName} (${order.customerPhone}) • Method: ${com.example.data.model.PaymentMethodOption.fromKey(order.paymentMethod).displayLabel}",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                                Text(
+                                    text = "Delivery: ${order.deliveryType.uppercase()} — ${order.deliveryAddress} • Order Status: ${order.orderStatus.uppercase()}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+
+                                if (order.transactionReference.isNotBlank() || order.proofScreenshotUri.isNotBlank()) {
+                                    Surface(
+                                        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
+                                        shape = RoundedCornerShape(10.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Column(modifier = Modifier.padding(10.dp)) {
+                                            Text(
+                                                text = "Submitted Payment Proof",
+                                                style = MaterialTheme.typography.labelMedium,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            if (order.transactionReference.isNotBlank()) {
+                                                Text(
+                                                    text = "Transaction Reference / TID: ${order.transactionReference}",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                            if (order.proofScreenshotUri.isNotBlank()) {
+                                                Spacer(modifier = Modifier.height(6.dp))
+                                                AsyncImage(
+                                                    model = order.proofScreenshotUri,
+                                                    contentDescription = "Payment Proof Screenshot",
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .height(150.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+
+                                HorizontalDivider()
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    OutlinedButton(
+                                        onClick = {
+                                            onVerifyOrderPayment(
+                                                order.id,
+                                                "Under Review",
+                                                order.orderStatus,
+                                                "Payment proof is under administrator review"
+                                            )
+                                        },
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("Under Review", style = MaterialTheme.typography.labelSmall)
+                                    }
+                                    Button(
+                                        onClick = {
+                                            onVerifyOrderPayment(
+                                                order.id,
+                                                "Payment Verified",
+                                                if (order.orderStatus == "pending") "confirmed" else order.orderStatus,
+                                                "Verified by MarketHub Administrator"
+                                            )
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D)),
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .testTag("verify_order_payment_${order.id}")
+                                    ) {
+                                        Text("Verify Payment", style = MaterialTheme.typography.labelSmall)
+                                    }
+                                    OutlinedButton(
+                                        onClick = {
+                                            onVerifyOrderPayment(
+                                                order.id,
+                                                "Payment Rejected",
+                                                order.orderStatus,
+                                                "Payment proof could not be verified"
+                                            )
+                                        },
+                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = DangerRed),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("Reject", style = MaterialTheme.typography.labelSmall)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            2 -> {
+                // ADMIN PAYMENT SETTINGS TAB
+                item {
+                    AdminPaymentSettingsEditorCard(
+                        paymentSettings = paymentSettings,
+                        onSave = onSavePaymentSettings
+                    )
+                }
+            }
+
+            3 -> {
                 // PRODUCTS MODERATION
                 items(allProducts, key = { it.id }) { prod ->
                     Card(
@@ -394,7 +588,7 @@ fun AdminDashboardScreen(
                 }
             }
 
-            2 -> {
+            4 -> {
                 // CATEGORIES MANAGEMENT
                 item {
                     Row(
@@ -446,7 +640,7 @@ fun AdminDashboardScreen(
                 }
             }
 
-            3 -> {
+            5 -> {
                 // COMMERCIAL MARKETS MANAGEMENT
                 item {
                     Row(
@@ -492,7 +686,7 @@ fun AdminDashboardScreen(
                 }
             }
 
-            4 -> {
+            6 -> {
                 // REPORTED LISTINGS
                 if (allReports.isEmpty()) {
                     item {
@@ -679,6 +873,235 @@ fun AdminDashboardScreen(
                 }
             }
         )
+    }
+}
+
+@Composable
+private fun AdminPaymentSettingsEditorCard(
+    paymentSettings: PaymentSettings,
+    onSave: (
+        bankTransferEnabled: Boolean,
+        bankName: String,
+        bankAccountTitle: String,
+        bankAccountNumberOrIban: String,
+        bankInstructions: String,
+        easypaisaEnabled: Boolean,
+        easypaisaAccountHolderName: String,
+        easypaisaMobileNumber: String,
+        easypaisaInstructions: String,
+        binancePayEnabled: Boolean,
+        binanceMerchantName: String,
+        binancePayIdOrInstructions: String,
+        codEnabledByDefault: Boolean,
+        allowShopkeeperPaymentVerification: Boolean
+    ) -> Unit
+) {
+    var bankEnabled by remember(paymentSettings) { mutableStateOf(paymentSettings.bankTransferEnabled) }
+    var bankName by remember(paymentSettings) { mutableStateOf(paymentSettings.bankName) }
+    var bankTitle by remember(paymentSettings) { mutableStateOf(paymentSettings.bankAccountTitle) }
+    var bankAccountNumberOrIban by remember(paymentSettings) { mutableStateOf(paymentSettings.bankAccountNumberOrIban) }
+    var bankInstructions by remember(paymentSettings) { mutableStateOf(paymentSettings.bankInstructions) }
+
+    var easypaisaEnabled by remember(paymentSettings) { mutableStateOf(paymentSettings.easypaisaEnabled) }
+    var easypaisaHolder by remember(paymentSettings) { mutableStateOf(paymentSettings.easypaisaAccountHolderName) }
+    var easypaisaNumber by remember(paymentSettings) { mutableStateOf(paymentSettings.easypaisaMobileNumber) }
+    var easypaisaInstructions by remember(paymentSettings) { mutableStateOf(paymentSettings.easypaisaInstructions) }
+
+    var binanceEnabled by remember(paymentSettings) { mutableStateOf(paymentSettings.binancePayEnabled) }
+    var binanceMerchant by remember(paymentSettings) { mutableStateOf(paymentSettings.binanceMerchantName) }
+    var binancePayIdOrInstructions by remember(paymentSettings) { mutableStateOf(paymentSettings.binancePayIdOrInstructions) }
+
+    var codEnabledByDefault by remember(paymentSettings) { mutableStateOf(paymentSettings.codEnabledByDefault) }
+    var allowShopkeeperVerify by remember(paymentSettings) {
+        mutableStateOf(paymentSettings.allowShopkeeperPaymentVerification)
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = "Verified Payment Method Settings",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = "Configure verified Bank Transfer, Easypaisa, and Binance Pay (Manual Payment) details. Customers only see payment methods enabled and verified here.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            HorizontalDivider()
+
+            // A. Bank Transfer
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Enable Bank Transfer", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Switch(checked = bankEnabled, onCheckedChange = { bankEnabled = it })
+            }
+            OutlinedTextField(
+                value = bankName,
+                onValueChange = { bankName = it },
+                label = { Text("Bank Name") },
+                placeholder = { Text("e.g. Meezan Bank / HBL") },
+                singleLine = true,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("admin_bank_name_input")
+            )
+            OutlinedTextField(
+                value = bankTitle,
+                onValueChange = { bankTitle = it },
+                label = { Text("Account Title") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+            OutlinedTextField(
+                value = bankAccountNumberOrIban,
+                onValueChange = { bankAccountNumberOrIban = it },
+                label = { Text("Account Number or IBAN") },
+                placeholder = { Text("PK00MEZN0000000000000000") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+            OutlinedTextField(
+                value = bankInstructions,
+                onValueChange = { bankInstructions = it },
+                label = { Text("Additional Bank Transfer Instructions (Optional)") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            HorizontalDivider()
+
+            // B. Easypaisa
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Enable Easypaisa", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Switch(checked = easypaisaEnabled, onCheckedChange = { easypaisaEnabled = it })
+            }
+            OutlinedTextField(
+                value = easypaisaHolder,
+                onValueChange = { easypaisaHolder = it },
+                label = { Text("Easypaisa Account Holder Name") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+            OutlinedTextField(
+                value = easypaisaNumber,
+                onValueChange = { easypaisaNumber = it },
+                label = { Text("Easypaisa Mobile Account Number") },
+                placeholder = { Text("03001234567") },
+                singleLine = true,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("admin_easypaisa_number_input")
+            )
+            OutlinedTextField(
+                value = easypaisaInstructions,
+                onValueChange = { easypaisaInstructions = it },
+                label = { Text("Additional Easypaisa Instructions (Optional)") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            HorizontalDivider()
+
+            // C. Binance Pay (Manual Payment)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Enable Binance Pay (Manual Payment)", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Switch(checked = binanceEnabled, onCheckedChange = { binanceEnabled = it })
+            }
+            OutlinedTextField(
+                value = binanceMerchant,
+                onValueChange = { binanceMerchant = it },
+                label = { Text("Verified Binance Merchant / Account Name") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+            OutlinedTextField(
+                value = binancePayIdOrInstructions,
+                onValueChange = { binancePayIdOrInstructions = it },
+                label = { Text("Verified Binance Pay ID & Manual Payment Instructions") },
+                placeholder = { Text("Binance Pay ID: ... — Send exact USDT equivalent and submit your Order/Transaction ID.") },
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            HorizontalDivider()
+
+            // D. Cash on Delivery & Shopkeeper Verification Permission
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Enable Cash on Delivery (COD)", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Switch(checked = codEnabledByDefault, onCheckedChange = { codEnabledByDefault = it })
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Allow Shopkeepers to Verify Manual Payments",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "When enabled, the shopkeeper of an order can also mark submitted payment proofs as Payment Verified.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(checked = allowShopkeeperVerify, onCheckedChange = { allowShopkeeperVerify = it })
+            }
+
+            Button(
+                onClick = {
+                    onSave(
+                        bankEnabled,
+                        bankName,
+                        bankTitle,
+                        bankAccountNumberOrIban,
+                        bankInstructions,
+                        easypaisaEnabled,
+                        easypaisaHolder,
+                        easypaisaNumber,
+                        easypaisaInstructions,
+                        binanceEnabled,
+                        binanceMerchant,
+                        binancePayIdOrInstructions,
+                        codEnabledByDefault,
+                        allowShopkeeperVerify
+                    )
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("save_payment_settings_button"),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("Save & Verify Payment Settings")
+            }
+        }
     }
 }
 

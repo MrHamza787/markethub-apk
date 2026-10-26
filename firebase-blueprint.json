@@ -203,6 +203,74 @@
         "reporterId", "reporterName", "targetType", "targetId", "targetName",
         "shopId", "reason", "status", "adminNotes", "createdAt", "updatedAt"
       ]
+    },
+    "PaymentSettings": {
+      "title": "PaymentSettings",
+      "description": "Administrator-verified payment methods and account instructions",
+      "type": "object",
+      "properties": {
+        "bankTransferEnabled": { "type": "boolean" },
+        "bankName": { "type": "string" },
+        "bankAccountTitle": { "type": "string" },
+        "bankAccountNumberOrIban": { "type": "string" },
+        "bankInstructions": { "type": "string" },
+        "easypaisaEnabled": { "type": "boolean" },
+        "easypaisaAccountHolderName": { "type": "string" },
+        "easypaisaMobileNumber": { "type": "string" },
+        "easypaisaInstructions": { "type": "string" },
+        "binancePayEnabled": { "type": "boolean" },
+        "binanceMerchantName": { "type": "string" },
+        "binancePayIdOrInstructions": { "type": "string" },
+        "codEnabledByDefault": { "type": "boolean" },
+        "allowShopkeeperPaymentVerification": { "type": "boolean" },
+        "updatedByUid": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "bankTransferEnabled", "bankName", "bankAccountTitle", "bankAccountNumberOrIban", "bankInstructions",
+        "easypaisaEnabled", "easypaisaAccountHolderName", "easypaisaMobileNumber", "easypaisaInstructions",
+        "binancePayEnabled", "binanceMerchantName", "binancePayIdOrInstructions",
+        "codEnabledByDefault", "allowShopkeeperPaymentVerification", "updatedByUid", "updatedAt"
+      ]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "WhatsApp Direct Purchase Checkout order record with backend-validated pricing and manual payment proof lifecycle",
+      "type": "object",
+      "properties": {
+        "orderNumber": { "type": "string", "description": "Unique human-readable order reference" },
+        "idempotencyKey": { "type": "string", "description": "Client idempotency token preventing duplicate creation" },
+        "customerId": { "type": "string", "description": "Customer UID" },
+        "customerName": { "type": "string", "description": "Customer full name" },
+        "customerPhone": { "type": "string", "description": "Customer mobile/WhatsApp number" },
+        "deliveryType": { "type": "string", "enum": ["delivery", "pickup"] },
+        "deliveryAddress": { "type": "string", "description": "Customer delivery address or shop pickup location" },
+        "productId": { "type": "string", "description": "Purchased product ID" },
+        "productName": { "type": "string", "description": "Product name snapshot" },
+        "shopId": { "type": "string", "description": "Target shop ID" },
+        "shopName": { "type": "string", "description": "Target shop name" },
+        "shopOwnerId": { "type": "string", "description": "Shopkeeper UID" },
+        "shopWhatsappNumber": { "type": "string", "description": "Verified shopkeeper WhatsApp number" },
+        "quantity": { "type": "integer", "description": "Ordered quantity" },
+        "unitPricePkr": { "type": "integer", "description": "Backend-validated unit price in PKR" },
+        "subtotalPkr": { "type": "integer", "description": "Backend-validated subtotal (quantity * unitPricePkr) in PKR" },
+        "paymentMethod": { "type": "string", "enum": ["BANK_TRANSFER", "EASYPAISA", "BINANCE_PAY", "CASH_ON_DELIVERY"] },
+        "paymentStatus": { "type": "string", "enum": ["Awaiting Payment", "Proof Submitted", "Under Review", "Payment Verified", "Payment Rejected"] },
+        "orderStatus": { "type": "string", "enum": ["pending", "confirmed", "completed", "cancelled"] },
+        "transactionReference": { "type": "string", "description": "Manual payment transaction reference / TID" },
+        "proofScreenshotUri": { "type": "string", "description": "Payment screenshot proof URI or data URI" },
+        "verifierNotes": { "type": "string", "description": "Admin or authorized verifier notes" },
+        "verifiedByUid": { "type": "string", "description": "UID of admin or verifier who confirmed payment" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "orderNumber", "idempotencyKey", "customerId", "customerName", "customerPhone",
+        "deliveryType", "deliveryAddress", "productId", "productName", "shopId", "shopName",
+        "shopOwnerId", "shopWhatsappNumber", "quantity", "unitPricePkr", "subtotalPkr",
+        "paymentMethod", "paymentStatus", "orderStatus", "transactionReference",
+        "proofScreenshotUri", "verifierNotes", "verifiedByUid", "createdAt", "updatedAt"
+      ]
     }
   },
   "firestore": {
@@ -241,6 +309,14 @@
     "/reports/{reportId}": {
       "schema": { "$ref": "#/entities/Report" },
       "description": "Reported listings for administrator review"
+    },
+    "/payment_settings/{settingId}": {
+      "schema": { "$ref": "#/entities/PaymentSettings" },
+      "description": "Admin-verified payment configurations for Bank Transfer, Easypaisa, Binance Pay, and COD"
+    },
+    "/orders/{orderId}": {
+      "schema": { "$ref": "#/entities/Order" },
+      "description": "WhatsApp Direct Purchase orders with backend price/stock validation and payment proof verification"
     }
   }
 }

@@ -297,6 +297,7 @@ fun ProductCard(
     onShopClick: (String) -> Unit,
     onCompareClick: (Product) -> Unit,
     onWhatsAppClick: (Product) -> Unit,
+    onBuyNowClick: ((Product) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -443,6 +444,34 @@ fun ProductCard(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
+                if (onBuyNowClick != null) {
+                    Button(
+                        onClick = { onBuyNowClick(product) },
+                        enabled = product.isAvailable && product.stockQuantity > 0,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("buy_now_product_${product.id}"),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = WhatsAppGreen,
+                            contentColor = Color.White
+                        ),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Chat,
+                            contentDescription = "Buy Now via WhatsApp",
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (product.isAvailable && product.stockQuantity > 0) "Buy Now on WhatsApp" else "Out of Stock",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                }
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -461,24 +490,21 @@ fun ProductCard(
                         Text("Compare", style = MaterialTheme.typography.labelMedium)
                     }
 
-                    Button(
+                    OutlinedButton(
                         onClick = { onWhatsAppClick(product) },
                         modifier = Modifier
-                            .weight(1.2f)
+                            .weight(1f)
                             .testTag("whatsapp_product_${product.id}"),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = WhatsAppGreen,
-                            contentColor = Color.White
-                        ),
                         shape = RoundedCornerShape(10.dp)
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Chat,
-                            contentDescription = "WhatsApp",
+                            contentDescription = "Inquire",
+                            tint = WhatsAppGreen,
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(5.dp))
-                        Text("WhatsApp", style = MaterialTheme.typography.labelMedium)
+                        Text("Inquire", style = MaterialTheme.typography.labelMedium)
                     }
                 }
             }

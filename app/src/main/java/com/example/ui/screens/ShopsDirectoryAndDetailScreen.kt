@@ -210,7 +210,8 @@ fun PublicShopPageScreen(
     onWhatsAppShop: (Shop) -> Unit,
     onWhatsAppProduct: (Product) -> Unit,
     onWhatsAppOffer: (Offer) -> Unit,
-    onReportShop: (Shop) -> Unit
+    onReportShop: (Shop) -> Unit,
+    onBuyNowProduct: (Product) -> Unit = {}
 ) {
     BackHandler(onBack = onBack)
     val context = LocalContext.current
@@ -519,6 +520,7 @@ fun PublicShopPageScreen(
                                 onShopClick = {},
                                 onCompareClick = onCompareProduct,
                                 onWhatsAppClick = onWhatsAppProduct,
+                                onBuyNowClick = onBuyNowProduct,
                                 modifier = Modifier.width(260.dp)
                             )
                         }
@@ -571,7 +573,8 @@ fun PublicShopPageScreen(
                         onProductClick = onProductClick,
                         onShopClick = {},
                         onCompareClick = onCompareProduct,
-                        onWhatsAppClick = onWhatsAppProduct
+                        onWhatsAppClick = onWhatsAppProduct,
+                        onBuyNowClick = onBuyNowProduct
                     )
                 }
             }

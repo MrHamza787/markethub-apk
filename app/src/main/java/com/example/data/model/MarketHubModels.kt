@@ -166,6 +166,98 @@ data class Report(
     @ServerTimestamp val updatedAt: Timestamp? = null
 )
 
+enum class PaymentMethodOption(val key: String, val displayLabel: String) {
+    BANK_TRANSFER("BANK_TRANSFER", "Bank Transfer"),
+    EASYPAISA("EASYPAISA", "Easypaisa"),
+    BINANCE_PAY("BINANCE_PAY", "Binance Pay (Manual Payment)"),
+    CASH_ON_DELIVERY("CASH_ON_DELIVERY", "Cash on Delivery");
+
+    companion object {
+        fun fromKey(key: String): PaymentMethodOption {
+            return entries.find { it.key.equals(key, ignoreCase = true) } ?: CASH_ON_DELIVERY
+        }
+    }
+}
+
+@IgnoreExtraProperties
+data class PaymentSettings(
+    @DocumentId val id: String = "global",
+    val bankTransferEnabled: Boolean = false,
+    val bankName: String = "",
+    val bankAccountTitle: String = "",
+    val bankAccountNumberOrIban: String = "",
+    val bankInstructions: String = "",
+    val easypaisaEnabled: Boolean = false,
+    val easypaisaAccountHolderName: String = "",
+    val easypaisaMobileNumber: String = "",
+    val easypaisaInstructions: String = "",
+    val binancePayEnabled: Boolean = false,
+    val binanceMerchantName: String = "",
+    val binancePayIdOrInstructions: String = "",
+    val codEnabledByDefault: Boolean = true,
+    val allowShopkeeperPaymentVerification: Boolean = false,
+    val updatedByUid: String = "",
+    @ServerTimestamp val updatedAt: Timestamp? = null
+) {
+    fun isBankConfiguredAndEnabled(): Boolean {
+        return bankTransferEnabled &&
+            bankName.isNotBlank() &&
+            bankAccountTitle.isNotBlank() &&
+            bankAccountNumberOrIban.isNotBlank()
+    }
+
+    fun isEasypaisaConfiguredAndEnabled(): Boolean {
+        return easypaisaEnabled &&
+            easypaisaAccountHolderName.isNotBlank() &&
+            easypaisaMobileNumber.isNotBlank()
+    }
+
+    fun isBinanceConfiguredAndEnabled(): Boolean {
+        return binancePayEnabled &&
+            binanceMerchantName.isNotBlank() &&
+            binancePayIdOrInstructions.isNotBlank()
+    }
+
+    fun enabledPaymentMethods(): List<PaymentMethodOption> {
+        val list = mutableListOf<PaymentMethodOption>()
+        if (isBankConfiguredAndEnabled()) list.add(PaymentMethodOption.BANK_TRANSFER)
+        if (isEasypaisaConfiguredAndEnabled()) list.add(PaymentMethodOption.EASYPAISA)
+        if (isBinanceConfiguredAndEnabled()) list.add(PaymentMethodOption.BINANCE_PAY)
+        if (codEnabledByDefault) list.add(PaymentMethodOption.CASH_ON_DELIVERY)
+        return list
+    }
+}
+
+@IgnoreExtraProperties
+data class Order(
+    @DocumentId val id: String = "",
+    val orderNumber: String = "",
+    val idempotencyKey: String = "",
+    val customerId: String = "",
+    val customerName: String = "",
+    val customerPhone: String = "",
+    val deliveryType: String = "delivery", // "delivery" or "pickup"
+    val deliveryAddress: String = "",
+    val productId: String = "",
+    val productName: String = "",
+    val shopId: String = "",
+    val shopName: String = "",
+    val shopOwnerId: String = "",
+    val shopWhatsappNumber: String = "",
+    val quantity: Long = 1L,
+    val unitPricePkr: Long = 0L,
+    val subtotalPkr: Long = 0L,
+    val paymentMethod: String = "CASH_ON_DELIVERY",
+    val paymentStatus: String = "Awaiting Payment", // "Awaiting Payment", "Proof Submitted", "Under Review", "Payment Verified", "Payment Rejected"
+    val orderStatus: String = "pending", // "pending", "confirmed", "completed", "cancelled"
+    val transactionReference: String = "",
+    val proofScreenshotUri: String = "",
+    val verifierNotes: String = "",
+    val verifiedByUid: String = "",
+    @ServerTimestamp val createdAt: Timestamp? = null,
+    @ServerTimestamp val updatedAt: Timestamp? = null
+)
+
 data class PriceComparisonGroup(
     val groupKey: String,
     val displayTitle: String,
@@ -326,6 +418,45 @@ object MarketHubDefaults {
 fun formatPkr(amount: Long): String {
     val formatter = NumberFormat.getNumberInstance(Locale.US)
     return "Rs. ${formatter.format(amount)}"
+}
+
+fun formatPkrNumberOnly(amount: Long): String {
+    val formatter = NumberFormat.getNumberInstance(Locale.US)
+    return formatter.format(amount)
+}
+
+fun buildWhatsAppDirectPurchaseOrderMessage(order: Order): String {
+    val productLink = "https://markethub.pk/shops/${order.shopId}/products/${order.productId}"
+    val paymentLabel = PaymentMethodOption.fromKey(order.paymentMethod).displayLabel
+    val addressLine = if (order.deliveryType == "pickup") {
+        "Local Shop Pickup (${order.deliveryAddress})"
+    } else {
+        order.deliveryAddress.ifBlank { "Not specified" }
+    }
+    return buildString {
+        appendLine("Hello! I want to purchase this product from MarketHub.")
+        appendLine()
+        appendLine("Order Details:")
+        appendLine("- Order Number: ${order.orderNumber}")
+        appendLine("- Product Name: ${order.productName}")
+        appendLine("- Product ID: ${order.productId}")
+        appendLine("- Shop Name: ${order.shopName}")
+        appendLine("- Quantity: ${order.quantity}")
+        appendLine("- Unit Price: Rs. ${formatPkrNumberOnly(order.unitPricePkr)}")
+        appendLine("- Subtotal: Rs. ${formatPkrNumberOnly(order.subtotalPkr)}")
+        appendLine("- Product Link: $productLink")
+        appendLine()
+        appendLine("Customer Details:")
+        appendLine("- Customer Name: ${order.customerName.ifBlank { "Not specified" }}")
+        appendLine("- Contact Number: ${order.customerPhone.ifBlank { "Not specified" }}")
+        appendLine("- Delivery Address: $addressLine")
+        appendLine()
+        appendLine("Selected Payment Method: $paymentLabel")
+        appendLine()
+        appendLine("Please confirm product availability, delivery charges and the final payable amount.")
+        appendLine()
+        append("Thank you!")
+    }
 }
 
 fun normalizeProductNameForComparison(name: String): String {

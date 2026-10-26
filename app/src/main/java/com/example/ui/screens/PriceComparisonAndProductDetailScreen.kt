@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.CompareArrows
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -73,7 +74,8 @@ fun PriceComparisonScreen(
     onSelectCategory: (String?) -> Unit,
     onOpenProductDetail: (Product) -> Unit,
     onOpenShopDetail: (String) -> Unit,
-    onWhatsAppProduct: (Product) -> Unit
+    onWhatsAppProduct: (Product) -> Unit,
+    onBuyNowProduct: (Product) -> Unit = {}
 ) {
     LazyColumn(
         modifier = Modifier
@@ -173,7 +175,8 @@ fun PriceComparisonScreen(
                     group = group,
                     onOpenProductDetail = onOpenProductDetail,
                     onOpenShopDetail = onOpenShopDetail,
-                    onWhatsAppProduct = onWhatsAppProduct
+                    onWhatsAppProduct = onWhatsAppProduct,
+                    onBuyNowProduct = onBuyNowProduct
                 )
             }
         }
@@ -187,7 +190,8 @@ private fun PriceComparisonGroupCard(
     group: PriceComparisonGroup,
     onOpenProductDetail: (Product) -> Unit,
     onOpenShopDetail: (String) -> Unit,
-    onWhatsAppProduct: (Product) -> Unit
+    onWhatsAppProduct: (Product) -> Unit,
+    onBuyNowProduct: (Product) -> Unit
 ) {
     val savingsPkr = (group.highestPricePkr - group.lowestPricePkr).coerceAtLeast(0L)
 
@@ -311,22 +315,34 @@ private fun PriceComparisonGroupCard(
                             color = MaterialTheme.colorScheme.primary
                         )
                         Spacer(modifier = Modifier.height(6.dp))
-                        Button(
-                            onClick = { onWhatsAppProduct(listing) },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = WhatsAppGreen,
-                                contentColor = Color.White
-                            ),
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.Chat,
-                                contentDescription = "WhatsApp",
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Inquire", style = MaterialTheme.typography.labelSmall)
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            OutlinedButton(
+                                onClick = { onWhatsAppProduct(listing) },
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Text("Inquire", style = MaterialTheme.typography.labelSmall)
+                            }
+                            if (listing.isAvailable && listing.stockQuantity > 0) {
+                                Button(
+                                    onClick = { onBuyNowProduct(listing) },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = WhatsAppGreen,
+                                        contentColor = Color.White
+                                    ),
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                                    modifier = Modifier.testTag("compare_buy_now_${listing.id}")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.ShoppingBag,
+                                        contentDescription = "Buy Now",
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Buy Now", style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
                         }
                     }
                 }
@@ -347,7 +363,8 @@ fun ProductDetailScreen(
     onOpenProduct: (Product) -> Unit,
     onWhatsAppInquiry: (Product) -> Unit,
     onInAppInquiry: (Product) -> Unit,
-    onReportProduct: (Product) -> Unit
+    onReportProduct: (Product) -> Unit,
+    onBuyNowProduct: (Product) -> Unit = {}
 ) {
     BackHandler(onBack = onBack)
 
@@ -499,7 +516,7 @@ fun ProductDetailScreen(
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "MarketHub connects you directly with the shopkeeper via WhatsApp or in-app inquiry. Verify availability before visiting or arranging delivery.",
+                            text = "MarketHub connects you directly with the shopkeeper via WhatsApp Direct Purchase Checkout or in-app inquiry. Verify availability before visiting or arranging delivery.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -572,7 +589,40 @@ fun ProductDetailScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Primary Contact Buttons
+                // Primary Buy Now to WhatsApp Button
+                Button(
+                    onClick = { onBuyNowProduct(product) },
+                    enabled = product.isAvailable && product.stockQuantity > 0,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(54.dp)
+                        .testTag("product_detail_buy_now_button"),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = WhatsAppGreen,
+                        contentColor = Color.White
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ShoppingBag,
+                        contentDescription = "Buy Now",
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = if (product.isAvailable && product.stockQuantity > 0) {
+                            "Buy Now on WhatsApp (${formatPkr(product.pricePkr)})"
+                        } else {
+                            "Currently Out of Stock — Inquire Below"
+                        },
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Secondary Contact Buttons
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -581,30 +631,27 @@ fun ProductDetailScreen(
                         onClick = { onInAppInquiry(product) },
                         modifier = Modifier
                             .weight(1f)
-                            .height(52.dp),
+                            .height(48.dp),
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Text("Send Inquiry")
                     }
-                    Button(
+                    OutlinedButton(
                         onClick = { onWhatsAppInquiry(product) },
                         modifier = Modifier
                             .weight(1.4f)
-                            .height(52.dp)
+                            .height(48.dp)
                             .testTag("product_detail_whatsapp_button"),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = WhatsAppGreen,
-                            contentColor = Color.White
-                        ),
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Chat,
                             contentDescription = "WhatsApp",
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(18.dp),
+                            tint = WhatsAppGreen
                         )
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Inquire on WhatsApp", fontWeight = FontWeight.Bold)
+                        Text("Ask Question on WhatsApp", fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -652,12 +699,28 @@ fun ProductDetailScreen(
                                         stockQuantity = other.stockQuantity
                                     )
                                 }
-                                Text(
-                                    text = formatPkr(other.pricePkr),
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text(
+                                        text = formatPkr(other.pricePkr),
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    if (other.isAvailable && other.stockQuantity > 0) {
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Button(
+                                            onClick = { onBuyNowProduct(other) },
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = WhatsAppGreen,
+                                                contentColor = Color.White
+                                            ),
+                                            shape = RoundedCornerShape(8.dp),
+                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                                        ) {
+                                            Text("Buy Now", style = MaterialTheme.typography.labelSmall)
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
