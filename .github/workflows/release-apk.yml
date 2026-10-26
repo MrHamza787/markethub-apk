@@ -1,0 +1,122 @@
+name: Publish Android Debug APK Release
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release-apk:
+    name: Build & Publish Debug APK to GitHub Releases
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Locate or Build Installable Debug APK
+        id: prepare_apk
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          # Extract app_name and applicationId dynamically from Android project files
+          APP_NAME=$(sed -n 's/.*<string name="app_name">\([^<]*\)<\/string>.*/\1/p' app/src/main/res/values/strings.xml | head -n 1 || true)
+          if [ -z "$APP_NAME" ]; then
+            APP_NAME="AndroidApp"
+          fi
+          SAFE_APP_NAME=$(echo "$APP_NAME" | tr -cd '[:alnum:]._-' )
+          if [ -z "$SAFE_APP_NAME" ]; then
+            SAFE_APP_NAME="AndroidApp"
+          fi
+
+          APP_ID=$(sed -n 's/.*applicationId *= *"\([^"]*\)".*/\1/p' app/build.gradle.kts | head -n 1 || true)
+          VERSION_NAME=$(sed -n 's/.*versionName *= *"\([^"]*\)".*/\1/p' app/build.gradle.kts | head -n 1 || true)
+          if [ -z "$VERSION_NAME" ]; then
+            VERSION_NAME="1.0"
+          fi
+
+          mkdir -p dist
+
+          # 1. Prefer the genuine debug APK compiled in Google AI Studio's native Android build environment
+          if [ -f ".build-outputs/app-debug.apk" ]; then
+            echo "Found pre-compiled Google AI Studio native APK at .build-outputs/app-debug.apk"
+            cp -f ".build-outputs/app-debug.apk" "dist/app-debug.apk"
+          elif [ -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
+            echo "Found pre-compiled APK at app/build/outputs/apk/debug/app-debug.apk"
+            cp -f "app/build/outputs/apk/debug/app-debug.apk" "dist/app-debug.apk"
+          else
+            echo "No pre-compiled APK found in repository; compiling with Gradle..."
+            if [ -f "debug.keystore.base64" ] && [ ! -f "debug.keystore" ]; then
+              base64 -d debug.keystore.base64 > debug.keystore
+            fi
+            if [ ! -f ".env" ] && [ -f ".env.example" ]; then
+              cp .env.example .env
+            fi
+            gradle assembleDebug --no-daemon
+            cp -f "app/build/outputs/apk/debug/app-debug.apk" "dist/app-debug.apk"
+          fi
+
+          cp -f "dist/app-debug.apk" "dist/${SAFE_APP_NAME}-debug.apk"
+          APK_SIZE=$(du -h "dist/app-debug.apk" | cut -f1)
+          APK_SHA256=$(sha256sum "dist/app-debug.apk" | awk '{print $1}')
+
+          echo "app_name=${APP_NAME}" >> "$GITHUB_OUTPUT"
+          echo "safe_app_name=${SAFE_APP_NAME}" >> "$GITHUB_OUTPUT"
+          echo "app_id=${APP_ID}" >> "$GITHUB_OUTPUT"
+          echo "version_name=${VERSION_NAME}" >> "$GITHUB_OUTPUT"
+          echo "apk_size=${APK_SIZE}" >> "$GITHUB_OUTPUT"
+          echo "apk_sha256=${APK_SHA256}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload APK Workflow Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.prepare_apk.outputs.safe_app_name }}-debug-apk
+          path: |
+            dist/app-debug.apk
+            dist/${{ steps.prepare_apk.outputs.safe_app_name }}-debug.apk
+          if-no-files-found: error
+
+      - name: Publish Permanent GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="v${{ steps.prepare_apk.outputs.version_name }}"
+          TITLE="${{ steps.prepare_apk.outputs.app_name }} ${TAG} (Installable Debug APK)"
+          REPO="${{ github.repository }}"
+
+          cat <<EOF > release_notes.md
+          ## ${{ steps.prepare_apk.outputs.app_name }} — Installable Android Debug APK
+
+          - **Application Name:** ${{ steps.prepare_apk.outputs.app_name }}
+          - **Package / Application ID:** \`${{ steps.prepare_apk.outputs.app_id }}\`
+          - **Version:** \`${{ steps.prepare_apk.outputs.version_name }}\`
+          - **APK Size:** \`${{ steps.prepare_apk.outputs.apk_size }}\`
+          - **SHA-256 Checksum:** \`${{ steps.prepare_apk.outputs.apk_sha256 }}\`
+
+          ### Direct Download Links
+          - **Permanent Latest APK URL:** https://github.com/${REPO}/releases/latest/download/app-debug.apk
+          - **Named APK URL:** https://github.com/${REPO}/releases/latest/download/${{ steps.prepare_apk.outputs.safe_app_name }}-debug.apk
+          EOF
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" \
+              "dist/app-debug.apk" \
+              "dist/${{ steps.prepare_apk.outputs.safe_app_name }}-debug.apk" \
+              --clobber
+            gh release edit "$TAG" --title "$TITLE" --notes-file release_notes.md --latest
+          else
+            gh release create "$TAG" \
+              "dist/app-debug.apk" \
+              "dist/${{ steps.prepare_apk.outputs.safe_app_name }}-debug.apk" \
+              --title "$TITLE" \
+              --notes-file release_notes.md \
+              --latest
+          fi
