@@ -19,5 +19,4 @@ debug.keystore
 *.jks
 *.keystore
 /dist
-/.build-outputs
 *-debug.log

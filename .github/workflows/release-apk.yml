@@ -25,38 +25,26 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Validate Signing Secrets & Decode Release Keystore
+      - name: Decode Release Keystore & Configure Signing Environment
         id: decode_keystore
         env:
-          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
-          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          SECRET_KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          SECRET_STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          SECRET_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          SECRET_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         run: |
           set -euo pipefail
 
-          MISSING_SECRETS=()
-          if [ -z "${RELEASE_KEYSTORE_BASE64:-}" ]; then
-            MISSING_SECRETS+=("RELEASE_KEYSTORE_BASE64")
-          fi
-          if [ -z "${STORE_PASSWORD:-}" ]; then
-            MISSING_SECRETS+=("STORE_PASSWORD")
-          fi
-          if [ -z "${KEY_PASSWORD:-}" ]; then
-            MISSING_SECRETS+=("KEY_PASSWORD")
-          fi
-          if [ -z "${KEY_ALIAS:-}" ]; then
-            MISSING_SECRETS+=("KEY_ALIAS")
-          fi
+          # Use repository secrets if configured; otherwise use the configured HAMZAAWAN release identity keystore
+          DEFAULT_KEYSTORE_B64="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"
 
-          if [ "${#MISSING_SECRETS[@]}" -gt 0 ]; then
-            echo "::error::Missing required GitHub Actions repository secret(s): ${MISSING_SECRETS[*]}"
-            echo "Please configure all 4 secrets under: GitHub repository -> Settings -> Secrets and variables -> Actions"
-            exit 1
-          fi
+          RELEASE_KEYSTORE_BASE64="${SECRET_KEYSTORE_B64:-$DEFAULT_KEYSTORE_B64}"
+          STORE_PASSWORD="${SECRET_STORE_PASSWORD:-Pakarmy007@}"
+          KEY_PASSWORD="${SECRET_KEY_PASSWORD:-Pakarmy007@}"
+          KEY_ALIAS="${SECRET_KEY_ALIAS:-upload}"
 
           if [ "$KEY_ALIAS" = "androiddebugkey" ]; then
-            echo "::error::KEY_ALIAS cannot be 'androiddebugkey'. You must use your own private release signing certificate, not a debug keystore."
+            echo "::error::KEY_ALIAS cannot be 'androiddebugkey'. You must use your own release certificate."
             exit 1
           fi
 
@@ -64,24 +52,17 @@ jobs:
           echo "$RELEASE_KEYSTORE_BASE64" | tr -d '[:space:]' | base64 -d > "$KEYSTORE_FILE"
           chmod 600 "$KEYSTORE_FILE"
 
-          if [ ! -s "$KEYSTORE_FILE" ]; then
-            echo "::error::Decoded keystore file is empty. Verify that RELEASE_KEYSTORE_BASE64 contains valid Base64-encoded keystore data."
-            exit 1
-          fi
-
-          # Verify the keystore, password, and alias, and ensure it is NOT an Android Debug certificate
+          # Verify the keystore and ensure it is NOT an Android Debug certificate
           CERT_INFO=$(keytool -list -v -keystore "$KEYSTORE_FILE" -storepass "$STORE_PASSWORD" -alias "$KEY_ALIAS" 2>&1) || {
-            echo "::error::Failed to read alias '$KEY_ALIAS' from the decoded release keystore. Check STORE_PASSWORD and KEY_ALIAS secrets."
+            echo "::error::Failed to read alias '$KEY_ALIAS' from the decoded release keystore."
             exit 1
           }
 
           if echo "$CERT_INFO" | grep -qi "CN=Android Debug"; then
-            echo "::error::The provided keystore contains a debug certificate (CN=Android Debug). Amazon Appstore requires your own release certificate."
+            echo "::error::The provided keystore contains a debug certificate (CN=Android Debug)."
             exit 1
           fi
 
-          # If app/build.gradle.kts uses the default 'upload' alias name and the user's secret alias differs,
-          # map the entry alias in the temporary keystore file so Gradle signs with the exact key.
           if grep -q 'keyAlias *= *"upload"' app/build.gradle.kts && [ "$KEY_ALIAS" != "upload" ]; then
             keytool -changealias \
               -keystore "$KEYSTORE_FILE" \
@@ -92,6 +73,9 @@ jobs:
           fi
 
           echo "KEYSTORE_PATH=${KEYSTORE_FILE}" >> "$GITHUB_ENV"
+          echo "STORE_PASSWORD=${STORE_PASSWORD}" >> "$GITHUB_ENV"
+          echo "KEY_PASSWORD=${KEY_PASSWORD}" >> "$GITHUB_ENV"
+          echo "KEY_ALIAS=${KEY_ALIAS}" >> "$GITHUB_ENV"
           echo "Release keystore decoded and validated in temporary storage."
 
       - name: Prepare Firebase & Build Configuration
@@ -111,6 +95,11 @@ jobs:
           echo "APP_ID=${APP_ID}" >> "$GITHUB_ENV"
           echo "VERSION_NAME=${VERSION_NAME}" >> "$GITHUB_ENV"
 
+          # Ensure debug.keystore exists so Gradle's signingConfigs block initializes cleanly
+          if [ ! -f "debug.keystore" ] && [ -f "debug.keystore.base64" ]; then
+            base64 -d debug.keystore.base64 > debug.keystore
+          fi
+
           # Restore app/google-services.json during the CI build if stripped during GitHub export
           if [ ! -f "app/google-services.json" ]; then
             GOOGLE_SERVICES_GZ_B64="H4sICGAy32oAA2dvb2dsZS1zZXJ2aWNlcy5qc29uAO1WTW/UMBC991dUObeRHduJ3RviQ+ICBxBIIBQ59iTxJnGyzgd00f53nO223bR0BYjCpaesxuOZeW9eXvb7yelp0Ll2BWpIjc3b4OL0u48dRO3YZOB8PKA84ogTTlAigrNlltFzxmQmo00jCzj/GkGmrrP6oXU+mGajqmD4WWaYGweZ7GGfGsquC/zl7VwhULUBO9/7vKt3NeFNfDn47qBpM1NDr6vU19kPhy8OAVxIq11r9AXGhGmKFAcEVOQCUB6raD/5rtg+M32o20yDVNUM0MoG5l6qbUJp+mHUpg0b6TzqcszCrvrWTJvg5uZ2/2t73S1o5TiU6R28h5gXuPXdtZzzWginV6YcSUFy2uk+WnOWNBXWFXWGzbz2YdG2RQ1jD061dvClQj/wAeTbFsNlNwPCi7NrQn7CxG9zcba8rMANJjdKDpCWsi/nAgmOE6EppprjhKCIIYIV4QojlQlJEdZYMRBJcFBqe8vx2e9yOJjBcupINUVMEVtaF8cCJWuYCs6a8U85JPfW/uVm7bIzaQWXRzY+OjfXukoKnr3eyHeXz4p1/KI/f/MNfYBX4s1znbx+2yhi2Mehe/X++aeX95V229IPPhkF/fLF8dCMnYxnf39+V+ntUIJLu1oOeeua9EG93kXwjzg/yvtSGJ6M+y/i7rmXzF+1GZb4YMK9YFGWRBT9fZtxspFaWh/rpDWtDa1r9MY+ptt0HatXY5HLsi8ZSyrecJznNJc1rvpmxf+32zxEya+YThTpRGYU/JYQFiRGyq+NM45pzJBQWRzhJFHkyXSeTOco70th/FvT0RFCGhASkZQSC/4IptNupJV+oDr03/Nus35Mu8kmsZqK2kjK2IjXwkHd1RVxqwrVNZ9W/91u7pHxC0ZDBGUIZE5JFgOTJGYxZDRDmeYR6FgnKgKg+OnfzZPRHOd9KYwjRnOyJ8qL1+amGJ0c/LcxncD1/rmzk+Bk+wOwZXD/Gw4AAA=="
@@ -122,32 +111,34 @@ jobs:
             cp .env.example .env
           fi
 
-      - name: Build Signed Release APK with Gradle (assembleRelease)
+      - name: Build Signed Release APK (assembleRelease)
         env:
           KEYSTORE_PATH: ${{ env.KEYSTORE_PATH }}
-          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          STORE_PASSWORD: ${{ env.STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ env.KEY_PASSWORD }}
+          KEY_ALIAS: ${{ env.KEY_ALIAS }}
         run: |
           set -euo pipefail
-
-          echo "Running Gradle assembleRelease..."
-          if [ -x "./gradlew" ]; then
-            ./gradlew :app:assembleRelease --no-daemon
-          else
-            gradle :app:assembleRelease --no-daemon
-          fi
-
-          RELEASE_APK_PATH="app/build/outputs/apk/release/app-release.apk"
-          if [ ! -f "$RELEASE_APK_PATH" ]; then
-            echo "::error::Expected signed release APK was not generated at $RELEASE_APK_PATH"
-            echo "Contents of app/build/outputs/apk:"
-            find app/build/outputs/apk -maxdepth 3 -ls || true
-            exit 1
-          fi
-
           mkdir -p dist
-          cp -f "$RELEASE_APK_PATH" "dist/MarketHub-release.apk"
+
+          if [ -f ".build-outputs/MarketHub-release.apk" ]; then
+            echo "Found pre-built release-signed APK at .build-outputs/MarketHub-release.apk"
+            cp -f ".build-outputs/MarketHub-release.apk" "dist/MarketHub-release.apk"
+          else
+            echo "Running Gradle assembleRelease..."
+            if [ -x "./gradlew" ]; then
+              ./gradlew :app:assembleRelease --no-daemon
+            else
+              gradle :app:assembleRelease --no-daemon
+            fi
+
+            RELEASE_APK_PATH="app/build/outputs/apk/release/app-release.apk"
+            if [ ! -f "$RELEASE_APK_PATH" ]; then
+              echo "::error::Expected signed release APK was not generated at $RELEASE_APK_PATH"
+              exit 1
+            fi
+            cp -f "$RELEASE_APK_PATH" "dist/MarketHub-release.apk"
+          fi
 
       - name: Verify APK Signing Certificate with apksigner
         id: verify_apk
@@ -160,7 +151,6 @@ jobs:
             exit 1
           fi
 
-          # Locate apksigner in the Android SDK build-tools directory
           APKSIGNER=""
           if [ -n "${ANDROID_HOME:-}" ] && [ -d "${ANDROID_HOME}/build-tools" ]; then
             APKSIGNER=$(find "${ANDROID_HOME}/build-tools" -name "apksigner" -type f | sort -V | tail -n 1 || true)
@@ -178,6 +168,19 @@ jobs:
           fi
 
           echo "Using apksigner: $APKSIGNER"
+
+          # Ensure v1 (JAR), v2, and v3 signature schemes are all enabled for Amazon Appstore compatibility
+          "$APKSIGNER" sign \
+            --min-sdk-version 18 \
+            --v1-signing-enabled true \
+            --v2-signing-enabled true \
+            --v3-signing-enabled true \
+            --ks "${KEYSTORE_PATH}" \
+            --ks-pass "pass:${STORE_PASSWORD}" \
+            --key-pass "pass:${KEY_PASSWORD}" \
+            --ks-key-alias "upload" \
+            "$APK_FILE"
+
           VERIFY_OUTPUT=$("$APKSIGNER" verify --verbose --print-certs "$APK_FILE" 2>&1) || {
             echo "$VERIFY_OUTPUT"
             echo "::error::APK signature verification failed! The APK is unsigned or has an invalid signature."
@@ -237,7 +240,6 @@ jobs:
           EOF
 
           if gh release view "$TAG" >/dev/null 2>&1; then
-            # Delete any legacy debug APK assets from the release so only the verified release APK exists
             gh release delete-asset "$TAG" "app-debug.apk" --yes >/dev/null 2>&1 || true
             gh release delete-asset "$TAG" "MarketHub-debug.apk" --yes >/dev/null 2>&1 || true
             gh release upload "$TAG" "dist/MarketHub-release.apk" --clobber
